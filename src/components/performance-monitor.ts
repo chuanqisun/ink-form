@@ -1,9 +1,18 @@
+interface PerformanceMonitorOptions {
+  windowSize?: number;
+  onFpsUpdate?: (fps: number) => void;
+}
+
 export class PerformanceMonitor {
-  constructor(options = {}) {
-    this.windowSize = options.windowSize || 60; // Number of frames to average
-    this.frameIntervals = [];
+  private readonly windowSize: number;
+  private frameIntervals: number[] = [];
+  private lastFrameTime: number;
+  private readonly onFpsUpdate: (fps: number) => void;
+
+  constructor(options: PerformanceMonitorOptions = {}) {
+    this.windowSize = options.windowSize ?? 60; // Number of frames to average
     this.lastFrameTime = performance.now();
-    this.onFpsUpdate = options.onFpsUpdate || (() => {});
+    this.onFpsUpdate = options.onFpsUpdate ?? (() => {});
   }
 
   tick() {
@@ -21,7 +30,7 @@ export class PerformanceMonitor {
     return fps;
   }
 
-  calculateFps() {
+  private calculateFps(): number {
     if (this.frameIntervals.length === 0) return 0;
     const avgInterval = this.frameIntervals.reduce((a, b) => a + b, 0) / this.frameIntervals.length;
     return Math.round(1000 / avgInterval);

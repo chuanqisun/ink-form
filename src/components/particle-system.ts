@@ -1,25 +1,69 @@
-export class ParticleSystem {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.gl = canvas.getContext("webgl2");
+interface ColorRGBA {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
 
-    if (!this.gl) {
+interface BufferSet {
+  buffer: WebGLBuffer | null;
+  vao: WebGLVertexArrayObject | null;
+  tf: WebGLTransformFeedback | null;
+}
+
+export class ParticleSystem {
+  private gl: WebGL2RenderingContext;
+  private width: number;
+  private height: number;
+  private particleCount: number;
+
+  private updateProgram: WebGLProgram;
+  private renderProgram: WebGLProgram;
+
+  private updatePositionLoc: GLint;
+  private updateVelocityLoc: GLint;
+  private updateBoundsLoc: WebGLUniformLocation | null;
+
+  private renderPositionLoc: GLint;
+  private renderResolutionLoc: WebGLUniformLocation | null;
+  private renderColorLoc: WebGLUniformLocation | null;
+
+  private buffers: BufferSet[];
+  private currentBuffer: number;
+  private squareBuffer: WebGLBuffer | null;
+
+  constructor(canvas: HTMLCanvasElement) {
+    const gl = canvas.getContext("webgl2");
+
+    if (!gl) {
       throw new Error("WebGL2 not supported");
     }
 
+    this.gl = gl;
     this.width = canvas.width;
     this.height = canvas.height;
     this.particleCount = 0;
+
+    this.updateProgram = null as any;
+    this.renderProgram = null as any;
+    this.updatePositionLoc = -1;
+    this.updateVelocityLoc = -1;
+    this.updateBoundsLoc = null;
+    this.renderPositionLoc = -1;
+    this.renderResolutionLoc = null;
+    this.renderColorLoc = null;
+    this.buffers = [];
+    this.currentBuffer = 0;
+    this.squareBuffer = null;
 
     this.initUpdateProgram();
     this.initRenderProgram();
     this.initBuffers();
   }
 
-  initUpdateProgram() {
+  private initUpdateProgram() {
     const gl = this.gl;
 
-    // Vertex shader for physics update (runs on GPU)
     const updateVertexShader = `#version 300 es
                     in vec2 a_position;
                     in vec2 a_velocity;
@@ -48,7 +92,6 @@ export class ParticleSystem {
                     }
                 `;
 
-    // Fragment shader for update (not used but required)
     const updateFragmentShader = `#version 300 es
                     precision mediump float;
                     out vec4 outColor;
@@ -60,29 +103,28 @@ export class ParticleSystem {
     const vs = this.compileShader(gl.VERTEX_SHADER, updateVertexShader);
     const fs = this.compileShader(gl.FRAGMENT_SHADER, updateFragmentShader);
 
-    this.updateProgram = gl.createProgram();
-    gl.attachShader(this.updateProgram, vs);
-    gl.attachShader(this.updateProgram, fs);
+    const program = gl.createProgram();
+    if (!program) throw new Error("Failed to create program");
 
-    // Specify transform feedback varyings BEFORE linking
-    gl.transformFeedbackVaryings(this.updateProgram, ["v_position", "v_velocity"], gl.INTERLEAVED_ATTRIBS);
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
 
-    gl.linkProgram(this.updateProgram);
+    gl.transformFeedbackVaryings(program, ["v_position", "v_velocity"], gl.INTERLEAVED_ATTRIBS);
+    gl.linkProgram(program);
 
-    if (!gl.getProgramParameter(this.updateProgram, gl.LINK_STATUS)) {
-      throw new Error("Update program link failed: " + gl.getProgramInfoLog(this.updateProgram));
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error("Update program link failed: " + gl.getProgramInfoLog(program));
     }
 
-    // Get locations
-    this.updatePositionLoc = gl.getAttribLocation(this.updateProgram, "a_position");
-    this.updateVelocityLoc = gl.getAttribLocation(this.updateProgram, "a_velocity");
-    this.updateBoundsLoc = gl.getUniformLocation(this.updateProgram, "u_bounds");
+    this.updateProgram = program;
+    this.updatePositionLoc = gl.getAttribLocation(program, "a_position");
+    this.updateVelocityLoc = gl.getAttribLocation(program, "a_velocity");
+    this.updateBoundsLoc = gl.getUniformLocation(program, "u_bounds");
   }
 
-  initRenderProgram() {
+  private initRenderProgram() {
     const gl = this.gl;
 
-    // Vertex shader for rendering
     const renderVertexShader = `#version 300 es
                     in vec2 a_position;
                     uniform vec2 u_resolution;
@@ -94,7 +136,6 @@ export class ParticleSystem {
                     }
                 `;
 
-    // Fragment shader for rendering
     const renderFragmentShader = `#version 300 es
                     precision mediump float;
                     uniform vec4 u_color;
@@ -108,24 +149,29 @@ export class ParticleSystem {
     const vs = this.compileShader(gl.VERTEX_SHADER, renderVertexShader);
     const fs = this.compileShader(gl.FRAGMENT_SHADER, renderFragmentShader);
 
-    this.renderProgram = gl.createProgram();
-    gl.attachShader(this.renderProgram, vs);
-    gl.attachShader(this.renderProgram, fs);
-    gl.linkProgram(this.renderProgram);
+    const program = gl.createProgram();
+    if (!program) throw new Error("Failed to create program");
 
-    if (!gl.getProgramParameter(this.renderProgram, gl.LINK_STATUS)) {
-      throw new Error("Render program link failed: " + gl.getProgramInfoLog(this.renderProgram));
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error("Render program link failed: " + gl.getProgramInfoLog(program));
     }
 
-    // Get locations
-    this.renderPositionLoc = gl.getAttribLocation(this.renderProgram, "a_position");
-    this.renderResolutionLoc = gl.getUniformLocation(this.renderProgram, "u_resolution");
-    this.renderColorLoc = gl.getUniformLocation(this.renderProgram, "u_color");
+    this.renderProgram = program;
+    this.renderPositionLoc = gl.getAttribLocation(program, "a_position");
+    this.renderResolutionLoc = gl.getUniformLocation(program, "u_resolution");
+    this.renderColorLoc = gl.getUniformLocation(program, "u_color");
   }
 
-  compileShader(type, source) {
+  private compileShader(type: GLenum, source: string): WebGLShader {
     const gl = this.gl;
     const shader = gl.createShader(type);
+
+    if (!shader) throw new Error("Failed to create shader");
+
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
 
@@ -138,10 +184,9 @@ export class ParticleSystem {
     return shader;
   }
 
-  initBuffers() {
+  private initBuffers() {
     const gl = this.gl;
 
-    // Create two buffers for ping-pong
     this.buffers = [
       {
         buffer: gl.createBuffer(),
@@ -156,40 +201,28 @@ export class ParticleSystem {
     ];
 
     this.currentBuffer = 0;
-
-    // Setup square rendering buffer
     this.squareBuffer = gl.createBuffer();
-    this.squareVAO = gl.createVertexArray();
   }
 
-  createSquare(x, y, size) {
+  createSquare(x: number, y: number, size: number) {
     const gl = this.gl;
-    const particles = [];
+    const particles: number[] = [];
 
-    // Generate particle data
     for (let py = y; py < y + size; py++) {
       for (let px = x; px < x + size; px++) {
-        particles.push(
-          px, // position x
-          py, // position y
-          (Math.random() - 0.5) * 2, // velocity x
-          (Math.random() - 0.5) * 2 // velocity y
-        );
+        particles.push(px, py, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
       }
     }
 
     this.particleCount = size * size;
     const data = new Float32Array(particles);
 
-    // Initialize both buffers with the same data
     for (let i = 0; i < 2; i++) {
       const buf = this.buffers[i];
 
-      // Setup buffer
       gl.bindBuffer(gl.ARRAY_BUFFER, buf.buffer);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_COPY);
 
-      // Setup VAO for update program
       gl.bindVertexArray(buf.vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf.buffer);
       gl.enableVertexAttribArray(this.updatePositionLoc);
@@ -197,7 +230,6 @@ export class ParticleSystem {
       gl.enableVertexAttribArray(this.updateVelocityLoc);
       gl.vertexAttribPointer(this.updateVelocityLoc, 2, gl.FLOAT, false, 16, 8);
 
-      // Setup transform feedback
       gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, buf.tf);
       gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, buf.buffer);
     }
@@ -212,66 +244,49 @@ export class ParticleSystem {
     const sourceBuffer = this.buffers[this.currentBuffer];
     const targetBuffer = this.buffers[1 - this.currentBuffer];
 
-    // Use update program
     gl.useProgram(this.updateProgram);
     gl.uniform2f(this.updateBoundsLoc, this.width, this.height);
 
-    // Bind source VAO (input)
     gl.bindVertexArray(sourceBuffer.vao);
-
-    // Bind target transform feedback (output)
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, targetBuffer.tf);
 
-    // Disable rasterization (we don't need to render during update)
     gl.enable(gl.RASTERIZER_DISCARD);
-
-    // Run the update shader with transform feedback
     gl.beginTransformFeedback(gl.POINTS);
     gl.drawArrays(gl.POINTS, 0, this.particleCount);
     gl.endTransformFeedback();
-
     gl.disable(gl.RASTERIZER_DISCARD);
 
-    // Unbind
     gl.bindVertexArray(null);
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
-    // Swap buffers
     this.currentBuffer = 1 - this.currentBuffer;
   }
 
-  render(color = { r: 0, g: 0, b: 0, a: 1 }) {
+  render(color: ColorRGBA = { r: 0, g: 0, b: 0, a: 1 }) {
     const gl = this.gl;
 
-    // Clear screen
     gl.clearColor(1.0, 1.0, 1.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     if (this.particleCount === 0) return;
 
-    // Use render program
     gl.useProgram(this.renderProgram);
     gl.uniform2f(this.renderResolutionLoc, this.width, this.height);
     gl.uniform4f(this.renderColorLoc, color.r, color.g, color.b, color.a);
 
-    // Bind current buffer
     const currentBuf = this.buffers[this.currentBuffer];
     gl.bindBuffer(gl.ARRAY_BUFFER, currentBuf.buffer);
 
-    // Setup position attribute for rendering (only position, skip velocity)
     gl.enableVertexAttribArray(this.renderPositionLoc);
     gl.vertexAttribPointer(this.renderPositionLoc, 2, gl.FLOAT, false, 16, 0);
 
-    // Draw particles
     gl.drawArrays(gl.POINTS, 0, this.particleCount);
-
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
 
-  drawSquare(x, y, size, color = { r: 0, g: 0, b: 0, a: 1 }) {
+  drawSquare(x: number, y: number, size: number, color: ColorRGBA = { r: 0, g: 0, b: 0, a: 1 }) {
     const gl = this.gl;
 
-    // Create vertices for the square (two triangles)
     const x1 = x;
     const y1 = y;
     const x2 = x + size;

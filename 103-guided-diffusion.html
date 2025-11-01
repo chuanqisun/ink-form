@@ -144,6 +144,170 @@
         }
       }
 
+      /**
+       * Converts images to pure black and white using Otsu's thresholding method.
+       * This preserves edges and provides excellent contrast.
+       */
+      class ImageProcessor {
+        /**
+         * Convert any image to black and white guide strokes
+         * @param {Blob|File} blob - Image blob to process
+         * @param {number} maxWidth - Maximum width to scale to
+         * @param {number} maxHeight - Maximum height to scale to
+         * @returns {Promise<Object>} Object containing { imageData, scaledWidth, scaledHeight, offsetX, offsetY }
+         */
+        static async processImage(blob, maxWidth, maxHeight) {
+          return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+
+            img.onload = () => {
+              try {
+                const { imageData, scaledWidth, scaledHeight, offsetX, offsetY } = ImageProcessor.convertToBlackAndWhite(img, maxWidth, maxHeight);
+
+                URL.revokeObjectURL(url);
+                resolve({ imageData, scaledWidth, scaledHeight, offsetX, offsetY });
+              } catch (error) {
+                URL.revokeObjectURL(url);
+                reject(error);
+              }
+            };
+
+            img.onerror = () => {
+              URL.revokeObjectURL(url);
+              reject(new Error("Failed to load image"));
+            };
+
+            img.src = url;
+          });
+        }
+
+        /**
+         * Calculate optimal threshold using Otsu's method
+         * @param {Uint8Array} grayscaleData - Grayscale pixel values
+         * @returns {number} Optimal threshold value (0-255)
+         */
+        static calculateOtsuThreshold(grayscaleData) {
+          // Build histogram
+          const histogram = new Array(256).fill(0);
+          for (let i = 0; i < grayscaleData.length; i++) {
+            histogram[grayscaleData[i]]++;
+          }
+
+          // Total number of pixels
+          const total = grayscaleData.length;
+
+          let sum = 0;
+          for (let i = 0; i < 256; i++) {
+            sum += i * histogram[i];
+          }
+
+          let sumB = 0;
+          let wB = 0;
+          let wF = 0;
+          let maxVariance = 0;
+          let threshold = 0;
+
+          for (let i = 0; i < 256; i++) {
+            wB += histogram[i];
+            if (wB === 0) continue;
+
+            wF = total - wB;
+            if (wF === 0) break;
+
+            sumB += i * histogram[i];
+
+            const mB = sumB / wB;
+            const mF = (sum - sumB) / wF;
+
+            const variance = wB * wF * (mB - mF) * (mB - mF);
+
+            if (variance > maxVariance) {
+              maxVariance = variance;
+              threshold = i;
+            }
+          }
+
+          return threshold;
+        }
+
+        /**
+         * Convert an image element to pure black and white
+         * @param {HTMLImageElement} img - Image element to convert
+         * @param {number} maxWidth - Maximum width to scale to
+         * @param {number} maxHeight - Maximum height to scale to
+         * @returns {Object} Object containing imageData and scaling information
+         */
+        static convertToBlackAndWhite(img, maxWidth, maxHeight) {
+          // Calculate scaling to fit container while maintaining aspect ratio
+          const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (maxWidth - scaledWidth) / 2;
+          const offsetY = (maxHeight - scaledHeight) / 2;
+
+          // Draw image to temporary canvas at original size
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tempCtx = tempCanvas.getContext("2d");
+          tempCtx.drawImage(img, 0, 0);
+
+          // Get image data
+          const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
+          const data = imageData.data;
+
+          // First pass: Convert to grayscale using luminosity method
+          const grayscale = new Uint8Array(img.width * img.height);
+          for (let i = 0; i < data.length; i += 4) {
+            const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+            grayscale[i / 4] = gray;
+          }
+
+          // Calculate optimal threshold using Otsu's method
+          const threshold = ImageProcessor.calculateOtsuThreshold(grayscale);
+
+          // Second pass: Apply threshold to create pure black and white
+          for (let i = 0; i < grayscale.length; i++) {
+            const bw = grayscale[i] > threshold ? 255 : 0;
+            data[i * 4] = bw;
+            data[i * 4 + 1] = bw;
+            data[i * 4 + 2] = bw;
+          }
+
+          return {
+            imageData,
+            scaledWidth,
+            scaledHeight,
+            offsetX,
+            offsetY,
+          };
+        }
+
+        /**
+         * Apply guide strokes to a canvas context
+         * @param {CanvasRenderingContext2D} ctx - Canvas context to draw to
+         * @param {ImageData} imageData - Processed image data (grayscale)
+         * @param {number} srcWidth - Source image width
+         * @param {number} srcHeight - Source image height
+         * @param {number} destX - Destination X coordinate on canvas
+         * @param {number} destY - Destination Y coordinate on canvas
+         * @param {number} destWidth - Destination width on canvas
+         * @param {number} destHeight - Destination height on canvas
+         */
+        static applyGuidesToCanvas(ctx, imageData, srcWidth, srcHeight, destX, destY, destWidth, destHeight) {
+          // Create temporary canvas from processed imageData
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = srcWidth;
+          tempCanvas.height = srcHeight;
+          const tempCtx = tempCanvas.getContext("2d");
+          tempCtx.putImageData(imageData, 0, 0);
+
+          // Draw to destination canvas with scaling
+          ctx.drawImage(tempCanvas, 0, 0, srcWidth, srcHeight, destX, destY, destWidth, destHeight);
+        }
+      }
+
       class StrokeCanvas {
         constructor(canvasId, strokeWidth = 2) {
           this.canvas = document.getElementById(canvasId);
@@ -176,6 +340,24 @@
 
         getImageData() {
           return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        }
+
+        /**
+         * Set image from a Blob or File as guide strokes
+         * Automatically converts colored images to grayscale for use as force field
+         */
+        async setImageFromBlob(blob) {
+          try {
+            const { imageData, scaledWidth, scaledHeight, offsetX, offsetY } = await ImageProcessor.processImage(blob, this.canvas.width, this.canvas.height);
+
+            // Clear canvas first
+            this.clear();
+
+            // Apply processed guide strokes to canvas
+            ImageProcessor.applyGuidesToCanvas(this.ctx, imageData, imageData.width, imageData.height, offsetX, offsetY, scaledWidth, scaledHeight);
+          } catch (error) {
+            console.error("Failed to process image:", error);
+          }
         }
       }
 
@@ -264,7 +446,26 @@
             this.strokeCanvas.stopDrawing();
           });
 
+          // Handle image paste events
+          document.addEventListener("paste", (e) => this.handlePaste(e));
+
           document.getElementById("clearBtn").addEventListener("click", () => this.clear());
+        }
+
+        handlePaste(e) {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+
+          for (const item of items) {
+            if (item.type.startsWith("image/")) {
+              e.preventDefault();
+              const blob = item.getAsFile();
+              if (blob) {
+                this.strokeCanvas.setImageFromBlob(blob);
+              }
+              break;
+            }
+          }
         }
 
         updatePointerPos(e) {

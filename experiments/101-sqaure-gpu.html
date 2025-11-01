@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Disintegrating Square - WebGL</title>
+  </head>
+  <body>
+    <canvas id="canvas" width="100" height="100"></canvas>
+    <button onclick="app.start()">Play</button>
+
+    <script>
+      // Particle System - manages particle state and physics
+      class ParticleSystem {
+        constructor(width, height) {
+          this.width = width;
+          this.height = height;
+          this.particles = [];
+        }
+
+        createSquare(x, y, size) {
+          this.particles = [];
+          for (let py = y; py < y + size; py++) {
+            for (let px = x; px < x + size; px++) {
+              this.particles.push({
+                x: px,
+                y: py,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+              });
+            }
+          }
+        }
+
+        update() {
+          for (let particle of this.particles) {
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+
+            if (particle.x < 0 || particle.x >= this.width) {
+              particle.vx *= -1;
+              particle.x = Math.max(0, Math.min(this.width - 1, particle.x));
+            }
+            if (particle.y < 0 || particle.y >= this.height) {
+              particle.vy *= -1;
+              particle.y = Math.max(0, Math.min(this.height - 1, particle.y));
+            }
+          }
+        }
+
+        getParticles() {
+          return this.particles;
+        }
+
+        clear() {
+          this.particles = [];
+        }
+      }
+
+      // WebGL Renderer
+      class WebGLRenderer {
+        constructor(canvas) {
+          this.canvas = canvas;
+          this.gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+
+          if (!this.gl) {
+            throw new Error("WebGL not supported");
+          }
+
+          this.width = canvas.width;
+          this.height = canvas.height;
+
+          this.initShaders();
+          this.initBuffers();
+        }
+
+        initShaders() {
+          const gl = this.gl;
+
+          // Vertex shader
+          const vertexShaderSource = `
+                    attribute vec2 a_position;
+                    uniform vec2 u_resolution;
+                    
+                    void main() {
+                        // Convert from pixels to clip space (-1 to 1)
+                        vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
+                        // Flip Y axis
+                        gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+                        gl_PointSize = 1.0;
+                    }
+                `;
+
+          // Fragment shader
+          const fragmentShaderSource = `
+                    precision mediump float;
+                    uniform vec4 u_color;
+                    
+                    void main() {
+                        gl_FragColor = u_color;
+                    }
+                `;
+
+          // Compile shaders
+          const vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexShaderSource);
+          const fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+          // Create program
+          this.program = gl.createProgram();
+          gl.attachShader(this.program, vertexShader);
+          gl.attachShader(this.program, fragmentShader);
+          gl.linkProgram(this.program);
+
+          if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+            throw new Error("Program link failed: " + gl.getProgramInfoLog(this.program));
+          }
+
+          // Get attribute and uniform locations
+          this.positionLocation = gl.getAttribLocation(this.program, "a_position");
+          this.resolutionLocation = gl.getUniformLocation(this.program, "u_resolution");
+          this.colorLocation = gl.getUniformLocation(this.program, "u_color");
+        }
+
+        compileShader(type, source) {
+          const gl = this.gl;
+          const shader = gl.createShader(type);
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const info = gl.getShaderInfoLog(shader);
+            gl.deleteShader(shader);
+            throw new Error("Shader compile failed: " + info);
+          }
+
+          return shader;
+        }
+
+        initBuffers() {
+          const gl = this.gl;
+          this.positionBuffer = gl.createBuffer();
+        }
+
+        clear() {
+          const gl = this.gl;
+          gl.clearColor(1.0, 1.0, 1.0, 1.0); // White
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+
+        drawSquare(x, y, size, color = { r: 0, g: 0, b: 0, a: 1 }) {
+          const gl = this.gl;
+
+          // Create vertices for the square (two triangles)
+          const x1 = x;
+          const y1 = y;
+          const x2 = x + size;
+          const y2 = y + size;
+
+          const positions = new Float32Array([x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2]);
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+          gl.useProgram(this.program);
+
+          // Set resolution
+          gl.uniform2f(this.resolutionLocation, this.width, this.height);
+
+          // Set color
+          gl.uniform4f(this.colorLocation, color.r, color.g, color.b, color.a);
+
+          // Enable position attribute
+          gl.enableVertexAttribArray(this.positionLocation);
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+          gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+          // Draw
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        renderParticles(particles, color = { r: 0, g: 0, b: 0, a: 1 }) {
+          const gl = this.gl;
+
+          this.clear();
+
+          if (particles.length === 0) return;
+
+          // Create position array from particles
+          const positions = new Float32Array(particles.length * 2);
+          for (let i = 0; i < particles.length; i++) {
+            positions[i * 2] = particles[i].x;
+            positions[i * 2 + 1] = particles[i].y;
+          }
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+
+          gl.useProgram(this.program);
+
+          // Set resolution
+          gl.uniform2f(this.resolutionLocation, this.width, this.height);
+
+          // Set color
+          gl.uniform4f(this.colorLocation, color.r, color.g, color.b, color.a);
+
+          // Enable position attribute
+          gl.enableVertexAttribArray(this.positionLocation);
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+          gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+          // Draw particles as points
+          gl.drawArrays(gl.POINTS, 0, particles.length);
+        }
+      }
+
+      // Application
+      class Application {
+        constructor(canvas, button) {
+          this.canvas = canvas;
+          this.button = button;
+
+          try {
+            this.renderer = new WebGLRenderer(canvas);
+          } catch (e) {
+            alert("WebGL not supported: " + e.message);
+            throw e;
+          }
+
+          this.particleSystem = new ParticleSystem(canvas.width, canvas.height);
+          this.animating = false;
+          this.animationId = null;
+
+          this.reset();
+        }
+
+        reset() {
+          if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+          }
+
+          this.animating = false;
+          this.particleSystem.clear();
+          this.button.disabled = false;
+
+          // Draw initial state
+          this.renderer.clear();
+          this.renderer.drawSquare(30, 30, 40, { r: 0, g: 0, b: 0, a: 1 });
+        }
+
+        start() {
+          if (this.animating) return;
+
+          this.animating = true;
+          this.button.disabled = true;
+
+          this.particleSystem.createSquare(30, 30, 40);
+          this.animate();
+        }
+
+        animate() {
+          this.particleSystem.update();
+          this.renderer.renderParticles(this.particleSystem.getParticles(), { r: 0, g: 0, b: 0, a: 1 });
+
+          if (this.animating) {
+            this.animationId = requestAnimationFrame(() => this.animate());
+          }
+        }
+      }
+
+      // Initialize application
+      const canvas = document.getElementById("canvas");
+      const button = document.querySelector("button");
+      const app = new Application(canvas, button);
+    </script>
+  </body>
+</html>

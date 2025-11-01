@@ -11,6 +11,42 @@
     <div><span id="fps"></span> fps</div>
 
     <script>
+      // Performance Monitor - standalone FPS tracking
+      class PerformanceMonitor {
+        constructor(options = {}) {
+          this.windowSize = options.windowSize || 60; // Number of frames to average
+          this.frameIntervals = [];
+          this.lastFrameTime = performance.now();
+          this.onFpsUpdate = options.onFpsUpdate || (() => {});
+        }
+
+        tick() {
+          const currentTime = performance.now();
+          const frameInterval = currentTime - this.lastFrameTime;
+          this.lastFrameTime = currentTime;
+
+          this.frameIntervals.push(frameInterval);
+          if (this.frameIntervals.length > this.windowSize) {
+            this.frameIntervals.shift();
+          }
+
+          const fps = this.calculateFps();
+          this.onFpsUpdate(fps);
+          return fps;
+        }
+
+        calculateFps() {
+          if (this.frameIntervals.length === 0) return 0;
+          const avgInterval = this.frameIntervals.reduce((a, b) => a + b, 0) / this.frameIntervals.length;
+          return Math.round(1000 / avgInterval);
+        }
+
+        reset() {
+          this.frameIntervals = [];
+          this.lastFrameTime = performance.now();
+        }
+      }
+
       // GPU Particle System - physics simulation runs on GPU using Transform Feedback
       class GPUParticleSystem {
         constructor(canvas) {
@@ -317,7 +353,7 @@
 
       // Application
       class Application {
-        constructor(canvas, button) {
+        constructor(canvas, button, fpsDisplay) {
           this.canvas = canvas;
           this.squareSize = 400;
           this.squareX = canvas.width / 2 - this.squareSize / 2;
@@ -334,11 +370,13 @@
           this.animating = false;
           this.animationId = null;
 
-          // FPS tracking using rolling average
-          this.frameIntervals = [];
-          this.maxIntervals = 60; // Keep last 60 frame intervals
-          this.lastFrameTime = performance.now();
-          this.fpsDisplay = document.getElementById("fps");
+          // Performance monitoring with callback
+          this.performanceMonitor = new PerformanceMonitor({
+            windowSize: 60,
+            onFpsUpdate: (fps) => {
+              fpsDisplay.textContent = fps;
+            },
+          });
 
           this.reset();
         }
@@ -372,21 +410,8 @@
           this.gpuSystem.update();
           this.gpuSystem.render({ r: 0, g: 0, b: 0, a: 1 });
 
-          // Update FPS counter with rolling average
-          const currentTime = performance.now();
-          const frameInterval = currentTime - this.lastFrameTime;
-          this.lastFrameTime = currentTime;
-
-          // Add to rolling average
-          this.frameIntervals.push(frameInterval);
-          if (this.frameIntervals.length > this.maxIntervals) {
-            this.frameIntervals.shift();
-          }
-
-          // Calculate average frame interval and convert to FPS
-          const avgInterval = this.frameIntervals.reduce((a, b) => a + b, 0) / this.frameIntervals.length;
-          const fps = Math.round(1000 / avgInterval);
-          this.fpsDisplay.textContent = fps;
+          // Track performance
+          this.performanceMonitor.tick();
 
           if (this.animating) {
             this.animationId = requestAnimationFrame(() => this.animate());
@@ -397,7 +422,8 @@
       // Initialize application
       const canvas = document.getElementById("canvas");
       const button = document.querySelector("button");
-      const app = new Application(canvas, button);
+      const fpsDisplay = document.getElementById("fps");
+      const app = new Application(canvas, button, fpsDisplay);
     </script>
   </body>
 </html>

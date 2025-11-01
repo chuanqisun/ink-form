@@ -386,6 +386,11 @@
           this.perfMonitor = new PerformanceMonitor();
           this.isDrawing = false;
 
+          // Cache for force field calculations
+          this.distanceField = null;
+          this.gradientField = null;
+          this.lastStrokeUpdate = 0;
+
           this.initEventListeners();
           this.animate();
         }
@@ -507,25 +512,126 @@
           this.tempCtx.clearRect(0, 0, this.tempCanvas.width, this.tempCanvas.height);
         }
 
+        /**
+         * Compute distance transform using fast approximation
+         * Returns array where each pixel stores distance to nearest stroke pixel
+         */
+        computeDistanceField(strokeData, width, height) {
+          const dist = new Float32Array(width * height);
+          const INF = width + height; // Large enough value
+
+          // Initialize distances
+          for (let i = 0; i < dist.length; i++) {
+            const alpha = strokeData[i * 4 + 3];
+            dist[i] = alpha > 0 ? 0 : INF;
+          }
+
+          // Forward pass
+          for (let y = 1; y < height; y++) {
+            for (let x = 1; x < width; x++) {
+              const i = y * width + x;
+              if (dist[i] > 0) {
+                const d1 = dist[i - 1] + 1; // left
+                const d2 = dist[i - width] + 1; // top
+                const d3 = dist[i - width - 1] + 1.414; // top-left
+                const d4 = dist[i - width + 1] + 1.414; // top-right
+                dist[i] = Math.min(dist[i], d1, d2, d3, d4);
+              }
+            }
+          }
+
+          // Backward pass
+          for (let y = height - 2; y >= 0; y--) {
+            for (let x = width - 2; x >= 0; x--) {
+              const i = y * width + x;
+              if (dist[i] > 0) {
+                const d1 = dist[i + 1] + 1; // right
+                const d2 = dist[i + width] + 1; // bottom
+                const d3 = dist[i + width + 1] + 1.414; // bottom-right
+                const d4 = dist[i + width - 1] + 1.414; // bottom-left
+                dist[i] = Math.min(dist[i], d1, d2, d3, d4);
+              }
+            }
+          }
+
+          return dist;
+        }
+
+        /**
+         * Compute gradient field from distance transform
+         * Particles follow gradient to move toward strokes
+         */
+        computeGradientField(distField, width, height) {
+          const gradX = new Float32Array(width * height);
+          const gradY = new Float32Array(width * height);
+
+          for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+              const i = y * width + x;
+
+              // Sobel operator for gradient
+              const gx =
+                distField[i - width - 1] * -1 +
+                distField[i - width + 1] * 1 +
+                distField[i - 1] * -2 +
+                distField[i + 1] * 2 +
+                distField[i + width - 1] * -1 +
+                distField[i + width + 1] * 1;
+
+              const gy =
+                distField[i - width - 1] * -1 +
+                distField[i - width] * -2 +
+                distField[i - width + 1] * -1 +
+                distField[i + width - 1] * 1 +
+                distField[i + width] * 2 +
+                distField[i + width + 1] * 1;
+
+              gradX[i] = gx;
+              gradY[i] = gy;
+            }
+          }
+
+          return { gradX, gradY };
+        }
+
+        /**
+         * Update force field cache when strokes change
+         */
+        updateForceFieldCache(strokeData, width, height) {
+          this.distanceField = this.computeDistanceField(strokeData, width, height);
+          this.gradientField = this.computeGradientField(this.distanceField, width, height);
+        }
+
         update(deltaTime) {
-          // Get stroke bitmap data for force field
           const strokeImageData = this.strokeCanvas.ctx.getImageData(0, 0, this.strokeCanvas.canvas.width, this.strokeCanvas.canvas.height);
           const strokeData = strokeImageData.data;
+          const width = strokeImageData.width;
+          const height = strokeImageData.height;
+
+          // Update force field cache periodically or when strokes change
+          const now = performance.now();
+          if (!this.distanceField || now - this.lastStrokeUpdate > 100) {
+            this.updateForceFieldCache(strokeData, width, height);
+            this.lastStrokeUpdate = now;
+          }
 
           for (const p of this.particles) {
-            // Apply force field from stroke bitmap
-            this.applyForceField(p, strokeData, strokeImageData.width, strokeImageData.height);
+            // Apply improved force field
+            this.applyForceFieldImproved(p, width, height);
 
-            // Add some randomness
+            // Reduced randomness for more predictable behavior
             p.vx += (Math.random() - 0.5) * 0.5;
             p.vy += (Math.random() - 0.5) * 0.5;
 
-            p.vx *= 0.99;
-            p.vy *= 0.99;
+            // Damping
+            p.vx *= 0.98;
+            p.vy *= 0.98;
 
+            // Update position
             p.x += p.vx;
             p.y += p.vy;
 
+            // Boundary conditions
             if (p.x < 0 || p.x > this.canvas.width) {
               p.vx *= -0.8;
               p.x = Math.max(0, Math.min(this.canvas.width, p.x));
@@ -537,53 +643,51 @@
           }
         }
 
-        applyForceField(particle, strokeData, width, height) {
-          const searchRadius = 50; // Pixels to search around particle
-          const attractionStrength = 0.5; // Force magnitude
+        /**
+         * Improved force field using distance transform and gradients
+         */
+        applyForceFieldImproved(particle, width, height) {
+          const x = Math.floor(particle.x);
+          const y = Math.floor(particle.y);
 
-          let closestDist = Infinity;
-          let closestX = 0;
-          let closestY = 0;
+          // Bounds check
+          if (x < 1 || x >= width - 1 || y < 1 || y >= height - 1) return;
 
-          // Search in a square around the particle
-          const startX = Math.max(0, Math.floor(particle.x - searchRadius));
-          const endX = Math.min(width - 1, Math.ceil(particle.x + searchRadius));
-          const startY = Math.max(0, Math.floor(particle.y - searchRadius));
-          const endY = Math.min(height - 1, Math.ceil(particle.y + searchRadius));
+          const i = y * width + x;
 
-          // Find closest stroke pixel
-          for (let y = startY; y <= endY; y++) {
-            for (let x = startX; x <= endX; x++) {
-              const index = (y * width + x) * 4;
-              const alpha = strokeData[index + 3]; // Check alpha channel
+          if (!this.distanceField || !this.gradientField) return;
 
-              // If there's a stroke at this position
-              if (alpha > 0) {
-                const dx = x - particle.x;
-                const dy = y - particle.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+          const distance = this.distanceField[i];
+          const gradX = this.gradientField.gradX[i];
+          const gradY = this.gradientField.gradY[i];
 
-                if (dist < closestDist && dist > 0) {
-                  closestDist = dist;
-                  closestX = x;
-                  closestY = y;
-                }
-              }
+          // If particle is far from any stroke, apply strong attraction
+          if (distance > 5) {
+            const strength = 0.8; // Stronger force for distant particles
+            const magnitude = Math.sqrt(gradX * gradX + gradY * gradY);
+
+            if (magnitude > 0.01) {
+              // Normalize and apply force toward stroke
+              particle.vx -= (gradX / magnitude) * strength;
+              particle.vy -= (gradY / magnitude) * strength;
             }
           }
+          // If particle is near a stroke, apply weaker force for smooth settling
+          else if (distance > 1) {
+            const strength = 0.3;
+            const magnitude = Math.sqrt(gradX * gradX + gradY * gradY);
 
-          // Apply attraction force towards closest stroke pixel
-          if (closestDist < Infinity) {
-            const dx = closestX - particle.x;
-            const dy = closestY - particle.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist > 0) {
-              // Normalize direction and apply force
-              const force = attractionStrength / (1 + dist * 0.1); // Force decreases with distance
-              particle.vx += (dx / dist) * force;
-              particle.vy += (dy / dist) * force;
+            if (magnitude > 0.01) {
+              particle.vx -= (gradX / magnitude) * strength;
+              particle.vy -= (gradY / magnitude) * strength;
             }
+          }
+          // If particle is on or very close to stroke, minimal force
+          else {
+            // Slight repulsion from exact stroke position to prevent clumping
+            const strength = 0.05;
+            particle.vx += (Math.random() - 0.5) * strength;
+            particle.vy += (Math.random() - 0.5) * strength;
           }
         }
 

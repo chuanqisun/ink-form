@@ -136,7 +136,15 @@
         }
 
         update(deltaTime) {
+          // Get stroke bitmap data for force field
+          const strokeImageData = this.strokeCanvas.ctx.getImageData(0, 0, this.strokeCanvas.canvas.width, this.strokeCanvas.canvas.height);
+          const strokeData = strokeImageData.data;
+
           for (const p of this.particles) {
+            // Apply force field from stroke bitmap
+            this.applyForceField(p, strokeData, strokeImageData.width, strokeImageData.height);
+
+            // Add some randomness
             p.vx += (Math.random() - 0.5) * 0.5;
             p.vy += (Math.random() - 0.5) * 0.5;
 
@@ -153,6 +161,56 @@
             if (p.y < 0 || p.y > this.canvas.height) {
               p.vy *= -0.8;
               p.y = Math.max(0, Math.min(this.canvas.height, p.y));
+            }
+          }
+        }
+
+        applyForceField(particle, strokeData, width, height) {
+          const searchRadius = 50; // Pixels to search around particle
+          const attractionStrength = 0.5; // Force magnitude
+
+          let closestDist = Infinity;
+          let closestX = 0;
+          let closestY = 0;
+
+          // Search in a square around the particle
+          const startX = Math.max(0, Math.floor(particle.x - searchRadius));
+          const endX = Math.min(width - 1, Math.ceil(particle.x + searchRadius));
+          const startY = Math.max(0, Math.floor(particle.y - searchRadius));
+          const endY = Math.min(height - 1, Math.ceil(particle.y + searchRadius));
+
+          // Find closest stroke pixel
+          for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+              const index = (y * width + x) * 4;
+              const alpha = strokeData[index + 3]; // Check alpha channel
+
+              // If there's a stroke at this position
+              if (alpha > 0) {
+                const dx = x - particle.x;
+                const dy = y - particle.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < closestDist && dist > 0) {
+                  closestDist = dist;
+                  closestX = x;
+                  closestY = y;
+                }
+              }
+            }
+          }
+
+          // Apply attraction force towards closest stroke pixel
+          if (closestDist < Infinity) {
+            const dx = closestX - particle.x;
+            const dy = closestY - particle.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0) {
+              // Normalize direction and apply force
+              const force = attractionStrength / (1 + dist * 0.1); // Force decreases with distance
+              particle.vx += (dx / dist) * force;
+              particle.vy += (dy / dist) * force;
             }
           }
         }

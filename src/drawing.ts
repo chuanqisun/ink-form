@@ -1,10 +1,10 @@
-import { DiffusionParticleSystem } from "./components/diffusion-particle-system";
+import { InteractiveParticleSystem } from "./components/interactive-particle-system";
 import { PerformanceMonitor } from "./components/performance-monitor";
 
 class Application {
   private readonly button: HTMLButtonElement;
   private readonly fpsDisplay: HTMLElement;
-  private readonly particleSystem: DiffusionParticleSystem;
+  private readonly particleSystem: InteractiveParticleSystem;
   private readonly performanceMonitor: PerformanceMonitor;
   private readonly squareSize = 400;
   private readonly squareX: number;
@@ -19,7 +19,7 @@ class Application {
     this.squareY = canvas.height / 2 - this.squareSize / 2;
 
     try {
-      this.particleSystem = new DiffusionParticleSystem(canvas);
+      this.particleSystem = new InteractiveParticleSystem(canvas);
     } catch (e) {
       alert("WebGL2 not supported: " + (e instanceof Error ? e.message : String(e)));
       throw e;

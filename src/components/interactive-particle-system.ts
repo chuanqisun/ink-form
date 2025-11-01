@@ -11,7 +11,7 @@ interface BufferSet {
   tf: WebGLTransformFeedback | null;
 }
 
-export class BiStableParticleSystem {
+export class InteractiveParticleSystem {
   private gl: WebGL2RenderingContext;
   private width: number;
   private height: number;

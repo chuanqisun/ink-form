@@ -9,9 +9,24 @@
     <canvas id="particleCanvas" width="300" height="600" style="border: 4px double #000"></canvas>
     <canvas id="strokeCanvas" width="300" height="600" style="border: 4px double #000"></canvas>
     <br />
+    <button commandfor="connection-dialog" command="show-modal">Setup</button>
     <button id="clearBtn">Clear</button>
     <div>Particles: <span id="count">0</span></div>
     <div>FPS: <span id="fps">0</span></div>
+
+    <dialog class="connection-form" id="connection-dialog">
+      <div class="connections-dialog-body">
+        <form method="dialog" id="ai-connection-form">
+          <h2>Google AI Studio Connection</h2>
+          <label for="api-key-input">API Key:</label>
+          <input type="password" id="api-key-input" placeholder="Enter your Google AI Studio API key" />
+          <button type="button" id="connect-btn">Connect</button>
+          <button type="button" id="disconnect-btn" style="display: none">Disconnect</button>
+          <button type="submit">Close</button>
+          <div id="connection-status"></div>
+        </form>
+      </div>
+    </dialog>
 
     <script>
       class PerformanceMonitor {
@@ -36,6 +51,96 @@
           if (this.frameTimes.length === 0) return 0;
           const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
           return Math.round(1000 / avg);
+        }
+      }
+
+      class AIConnection {
+        constructor() {
+          this.apiKey = null;
+          this.isConnected = false;
+          this.initEventListeners();
+          this.loadApiKey();
+        }
+
+        initEventListeners() {
+          const connectBtn = document.getElementById("connect-btn");
+          const disconnectBtn = document.getElementById("disconnect-btn");
+          const apiKeyInput = document.getElementById("api-key-input");
+
+          connectBtn.addEventListener("click", () => this.connect());
+          disconnectBtn.addEventListener("click", () => this.disconnect());
+
+          // Allow Enter key to connect
+          apiKeyInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              this.connect();
+            }
+          });
+        }
+
+        loadApiKey() {
+          const stored = localStorage.getItem("google_ai_api_key");
+          if (stored) {
+            this.apiKey = stored;
+            this.setConnected(true);
+          }
+        }
+
+        connect() {
+          const apiKeyInput = document.getElementById("api-key-input");
+          const apiKey = apiKeyInput.value.trim();
+
+          if (!apiKey) {
+            this.updateStatus("Please enter an API key", "error");
+            return;
+          }
+
+          // Store the API key
+          this.apiKey = apiKey;
+          localStorage.setItem("google_ai_api_key", apiKey);
+          this.setConnected(true);
+          this.updateStatus("Connected successfully!", "success");
+        }
+
+        disconnect() {
+          this.apiKey = null;
+          localStorage.removeItem("google_ai_api_key");
+          this.setConnected(false);
+          document.getElementById("api-key-input").value = "";
+          this.updateStatus("Disconnected", "info");
+        }
+
+        setConnected(connected) {
+          this.isConnected = connected;
+          const connectBtn = document.getElementById("connect-btn");
+          const disconnectBtn = document.getElementById("disconnect-btn");
+          const apiKeyInput = document.getElementById("api-key-input");
+
+          if (connected) {
+            connectBtn.style.display = "none";
+            disconnectBtn.style.display = "inline-block";
+            apiKeyInput.disabled = true;
+            apiKeyInput.value = this.apiKey;
+          } else {
+            connectBtn.style.display = "inline-block";
+            disconnectBtn.style.display = "none";
+            apiKeyInput.disabled = false;
+            apiKeyInput.value = "";
+          }
+        }
+
+        updateStatus(message, type = "info") {
+          const statusDiv = document.getElementById("connection-status");
+          statusDiv.textContent = message;
+          statusDiv.style.color = type === "error" ? "red" : type === "success" ? "green" : "blue";
+        }
+
+        getApiKey() {
+          return this.apiKey;
+        }
+
+        isAPIConnected() {
+          return this.isConnected;
         }
       }
 
@@ -317,6 +422,7 @@
         }
       }
 
+      const aiConnection = new AIConnection();
       const particleSystem = new ParticleSystem("particleCanvas", "strokeCanvas");
     </script>
   </body>

@@ -6,8 +6,9 @@
     <title>Disintegrating Square</title>
   </head>
   <body>
-    <canvas id="canvas" width="100" height="100"></canvas>
+    <canvas id="canvas" width="1600" height="1600"></canvas>
     <button onclick="startAnimation()">Play</button>
+    <div><span id="fps"></span> fps</div>
 
     <script>
       const canvas = document.getElementById("canvas");
@@ -15,9 +16,20 @@
       const width = canvas.width;
       const height = canvas.height;
 
+      // Parameterize square dimension
+      const squareDimension = 1000;
+      const squareX = (width - squareDimension) / 2;
+      const squareY = (height - squareDimension) / 2;
+
       let particles = [];
       let animating = false;
       let animationId = null;
+
+      // FPS tracking using rolling average
+      let frameIntervals = [];
+      const maxIntervals = 60; // Keep last 60 frame intervals
+      let lastFrameTime = performance.now();
+      const fpsDisplay = document.getElementById("fps");
 
       // Initialize the square
       function reset() {
@@ -41,9 +53,9 @@
           data[i + 3] = 255; // A
         }
 
-        // Draw 40x40 black square centered at (30, 30)
-        for (let y = 30; y < 70; y++) {
-          for (let x = 30; x < 70; x++) {
+        // Draw 40x40 black square centered in canvas
+        for (let y = squareY; y < squareY + squareDimension; y++) {
+          for (let x = squareX; x < squareX + squareDimension; x++) {
             const index = (y * width + x) * 4;
             data[index + 0] = 0; // R
             data[index + 1] = 0; // G
@@ -59,9 +71,9 @@
       function createParticles() {
         particles = [];
 
-        // Create a particle for each pixel in the 40x40 square
-        for (let y = 30; y < 70; y++) {
-          for (let x = 30; x < 70; x++) {
+        // Create a particle for each pixel in the square
+        for (let y = squareY; y < squareY + squareDimension; y++) {
+          for (let x = squareX; x < squareX + squareDimension; x++) {
             particles.push({
               x: x,
               y: y,
@@ -116,6 +128,22 @@
         }
 
         ctx.putImageData(imageData, 0, 0);
+
+        // Update FPS counter with rolling average
+        const currentTime = performance.now();
+        const frameInterval = currentTime - lastFrameTime;
+        lastFrameTime = currentTime;
+
+        // Add to rolling average
+        frameIntervals.push(frameInterval);
+        if (frameIntervals.length > maxIntervals) {
+          frameIntervals.shift();
+        }
+
+        // Calculate average frame interval and convert to FPS
+        const avgInterval = frameIntervals.reduce((a, b) => a + b, 0) / frameIntervals.length;
+        const fps = Math.round(1000 / avgInterval);
+        fpsDisplay.textContent = fps;
 
         if (animating) {
           animationId = requestAnimationFrame(animateFrame);

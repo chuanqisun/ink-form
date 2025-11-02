@@ -246,19 +246,26 @@
           const offsetX = (maxWidth - scaledWidth) / 2;
           const offsetY = (maxHeight - scaledHeight) / 2;
 
-          // Draw image to temporary canvas at original size
-          const tempCanvas = document.createElement("canvas");
-          tempCanvas.width = img.width;
-          tempCanvas.height = img.height;
-          const tempCtx = tempCanvas.getContext("2d");
-          tempCtx.drawImage(img, 0, 0);
+          // Create a canvas sized to match the final display dimensions (including white background)
+          const displayCanvas = document.createElement("canvas");
+          displayCanvas.width = maxWidth;
+          displayCanvas.height = maxHeight;
+          const displayCtx = displayCanvas.getContext("2d");
 
-          // Get image data
-          const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
-          const data = imageData.data;
+          // Paint entire canvas white
+          displayCtx.fillStyle = "#FFFFFF";
+          displayCtx.fillRect(0, 0, maxWidth, maxHeight);
 
-          // First pass: Convert to grayscale using luminosity method
-          const grayscale = new Uint8Array(img.width * img.height);
+          // Draw the image on the white background with alpha blending
+          // This allows the image to blend naturally with the white background
+          displayCtx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+
+          // Get the blended image data from the display canvas
+          const blendedImageData = displayCtx.getImageData(0, 0, maxWidth, maxHeight);
+          const data = blendedImageData.data;
+
+          // First pass: Convert blended image to grayscale using luminosity method
+          const grayscale = new Uint8Array(maxWidth * maxHeight);
           for (let i = 0; i < data.length; i += 4) {
             const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
             grayscale[i / 4] = gray;
@@ -277,11 +284,11 @@
           }
 
           return {
-            imageData,
-            scaledWidth,
-            scaledHeight,
-            offsetX,
-            offsetY,
+            imageData: blendedImageData,
+            scaledWidth: maxWidth,
+            scaledHeight: maxHeight,
+            offsetX: 0,
+            offsetY: 0,
           };
         }
 

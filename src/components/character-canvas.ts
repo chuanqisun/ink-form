@@ -10,7 +10,6 @@ export class CharacterCanvas extends EventTarget {
     charCanvas.style.position = "absolute";
     charCanvas.style.top = "0";
     charCanvas.style.left = "0";
-    charCanvas.style.border = "1px solid black";
 
     return charCanvas;
   }

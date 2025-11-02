@@ -4,6 +4,7 @@ export class DrawingCanvas extends EventTarget {
   private isDrawing: boolean;
   private hasDrawn: boolean;
   private dispatched: boolean;
+  private drawingTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(canvasId: string) {
     super();
@@ -19,7 +20,7 @@ export class DrawingCanvas extends EventTarget {
     this.canvas.addEventListener("pointerdown", (e: PointerEvent) => this.startDrawing(e));
     this.canvas.addEventListener("pointermove", (e: PointerEvent) => this.draw(e));
     this.canvas.addEventListener("pointerup", () => this.handlePointerup());
-    this.canvas.addEventListener("pointerout", () => this.handleFinishDrawing());
+    this.canvas.addEventListener("mouseout", () => this.handleFinishDrawing());
   }
 
   get element(): HTMLCanvasElement {
@@ -47,10 +48,23 @@ export class DrawingCanvas extends EventTarget {
     this.ctx.putImageData(data, 0, 0);
   }
 
+  private clearDrawingTimer(): void {
+    if (this.drawingTimer) {
+      clearTimeout(this.drawingTimer);
+      this.drawingTimer = null;
+    }
+  }
+
+  private resetTimer(): void {
+    this.clearDrawingTimer();
+    this.drawingTimer = setTimeout(() => this.handleFinishDrawing(), 1000);
+  }
+
   private startDrawing(e: PointerEvent): void {
     this.isDrawing = true;
     this.hasDrawn = false;
     this.dispatched = false;
+    this.resetTimer();
     const rect = this.canvas.getBoundingClientRect();
     this.ctx.beginPath();
     this.ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
@@ -58,6 +72,7 @@ export class DrawingCanvas extends EventTarget {
 
   private draw(e: PointerEvent): void {
     if (!this.isDrawing) return;
+    this.resetTimer();
     const rect = this.canvas.getBoundingClientRect();
     this.ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
     this.ctx.stroke();
@@ -69,6 +84,7 @@ export class DrawingCanvas extends EventTarget {
   }
 
   private handleFinishDrawing(): void {
+    this.clearDrawingTimer();
     if (this.hasDrawn && !this.dispatched) {
       this.dispatchEvent(new CustomEvent("drawingstop"));
       this.dispatched = true;
@@ -106,5 +122,6 @@ export class DrawingCanvas extends EventTarget {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.hasDrawn = false;
     this.dispatched = false;
+    this.clearDrawingTimer();
   }
 }

@@ -1,6 +1,5 @@
-import { concatMap, EMPTY, from, fromEvent, mergeMap, take } from "rxjs";
+import { concatMap, EMPTY, from, fromEvent, map, mergeMap, take } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
-import { CharacterCanvas } from "./components/base-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
@@ -10,20 +9,28 @@ export async function main() {
   const connection = new AIConnection();
   const drawCanvas = new DrawingCanvas("DrawCanvas");
   const generativeCanvas = new GenerativeCanvas("GenerativeCanvas");
-  const characterCanvas = new CharacterCanvas("CharacterCanvas");
 
   const program$ = fromEvent(drawCanvas, "drawingstop").pipe(
     mergeMap(() => {
-      characterCanvas.writeImage(drawCanvas.readImage());
+      const charCanvas = document.createElement("canvas");
+      charCanvas.width = 360;
+      charCanvas.height = 640;
+      charCanvas.style.position = "absolute";
+      charCanvas.style.top = "0";
+      charCanvas.style.left = "0";
+      charCanvas.style.border = "1px solid black";
+      const stack = document.querySelector(".canvas-stack")!;
+      stack.insertBefore(charCanvas, drawCanvas.element);
+      const ctx = charCanvas.getContext("2d")!;
+      ctx.putImageData(drawCanvas.readImage(), 0, 0);
       const dataUrl = drawCanvas.readBase64DataUrl();
       const boundingBox = drawCanvas.getBoundingBox();
       drawCanvas.clear();
-      if (!boundingBox) return EMPTY;
-
-      return identifyCharacter(connection, dataUrl).then((char) => ({
-        character: char,
-        box: boundingBox,
-      }));
+      if (!boundingBox) {
+        charCanvas.remove();
+        return EMPTY;
+      }
+      return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ character: char, box: boundingBox, charCanvas })));
     }),
     concatMap((result) => {
       console.log("Character", result.character);
@@ -33,7 +40,10 @@ export async function main() {
       return from(overlayImage ? editPainting(connection, overlayImage, result.character) : generatePainting(connection, result.character)).pipe(
         concatMap((imageUrls) => from(imageUrls)),
         take(1),
-        concatMap(async (imageUrl) => generativeCanvas.writeDataUrl(imageUrl))
+        concatMap(async (imageUrl) => {
+          await generativeCanvas.writeDataUrl(imageUrl);
+          result.charCanvas.remove();
+        })
       );
     })
   );

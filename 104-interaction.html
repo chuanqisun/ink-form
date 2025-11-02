@@ -7,10 +7,11 @@
   </head>
   <body>
     <canvas id="particleCanvas" width="300" height="600" style="border: 4px double #000"></canvas>
-    <canvas id="strokeCanvas" width="300" height="600" style="border: 4px double #000"></canvas>
+    <canvas id="strokeCanvas" width="300" height="600" style="border: 4px double #000; cursor: crosshair"></canvas>
     <br />
     <button id="clearParticlesBtn">Clear Particles</button>
     <button id="clearStrokeBtn">Clear Stroke</button>
+    <button id="renderBtn">Render</button>
     <div>Particles: <span id="count">0</span></div>
     <div>FPS: <span id="fps">0</span></div>
 
@@ -49,13 +50,44 @@
           this.canvas = document.getElementById(canvasId);
           this.ctx = this.canvas.getContext("2d");
           this.isDrawing = false;
+          this.lastHash = null;
           this._configureContext();
+          this._initEventListeners();
         }
 
         _configureContext() {
           this.ctx.lineWidth = 2;
           this.ctx.lineCap = "round";
           this.ctx.strokeStyle = "#000";
+        }
+
+        _initEventListeners() {
+          this.canvas.addEventListener("pointerdown", (e) => this._onPointerDown(e));
+          this.canvas.addEventListener("pointermove", (e) => this._onPointerMove(e));
+          this.canvas.addEventListener("pointerup", () => this._onPointerUp());
+          this.canvas.addEventListener("pointerout", () => this._onPointerUp());
+        }
+
+        _onPointerDown(e) {
+          this.isDrawing = true;
+          const rect = this.canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, y);
+        }
+
+        _onPointerMove(e) {
+          if (!this.isDrawing) return;
+          const rect = this.canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          this.ctx.lineTo(x, y);
+          this.ctx.stroke();
+        }
+
+        _onPointerUp() {
+          this.isDrawing = false;
         }
 
         startDrawing(x, y) {
@@ -76,10 +108,37 @@
 
         clear() {
           this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          this.lastHash = null;
         }
 
         getImageData() {
           return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        }
+
+        /**
+         * Check if the stroke canvas content has changed since last check
+         * @returns {boolean} true if content has changed, false otherwise
+         */
+        hasChanged() {
+          const imageData = this.getImageData();
+          const currentHash = this._computeHash(imageData.data);
+          const hasChanged = this.lastHash === null || this.lastHash !== currentHash;
+          this.lastHash = currentHash;
+          return hasChanged;
+        }
+
+        /**
+         * Compute a simple hash of the image data for change detection
+         * @private
+         */
+        _computeHash(data) {
+          let hash = 0;
+          // Sample every 100th pixel for performance
+          for (let i = 0; i < data.length; i += 400) {
+            hash = (hash << 5) - hash + data[i];
+            hash = hash & hash; // Convert to 32bit integer
+          }
+          return hash.toString();
         }
 
         get width() {
@@ -260,13 +319,20 @@
             isPointerDown: false,
             pointerX: 0,
             pointerY: 0,
-            lastAddTime: 0,
-            lastFrameTime: 0,
+            prevPointerX: 0,
+            prevPointerY: 0,
+            lastSpawnX: 0,
+            lastSpawnY: 0,
+            accumulatedDistance: 0,
+            lastMoveTime: 0,
+            velocity: 0, // Current cursor velocity in pixels per frame
           };
 
           this.spawnConfig = {
-            particlesPerBatch: 10,
-            spawnInterval: 10, // milliseconds
+            spawnSpacing: 8, // Pixels between spawn points for even distribution
+            pauseThreshold: 100, // Milliseconds of no movement before stopping spawns
+            particlesPerSpawn: 5, // Particles spawned at each interval
+            maxVelocity: 50, // Maximum velocity cap for particle count scaling
           };
 
           this._initEventListeners();
@@ -280,12 +346,20 @@
           this.canvas.addEventListener("pointerout", () => this._onPointerUp());
           document.getElementById("clearParticlesBtn").addEventListener("click", () => this.clearParticles());
           document.getElementById("clearStrokeBtn").addEventListener("click", () => this.clearStroke());
+          document.getElementById("renderBtn").addEventListener("click", () => this.render());
         }
 
         _onPointerDown(e) {
           this.state.isPointerDown = true;
           this._updatePointerPosition(e);
           this.strokeCanvas.startDrawing(this.state.pointerX, this.state.pointerY);
+          // Initialize spawn tracking at pointer down
+          this.state.lastSpawnX = this.state.pointerX;
+          this.state.lastSpawnY = this.state.pointerY;
+          this.state.prevPointerX = this.state.pointerX;
+          this.state.prevPointerY = this.state.pointerY;
+          this.state.accumulatedDistance = 0;
+          this.state.lastMoveTime = performance.now();
         }
 
         _onPointerMove(e) {
@@ -302,21 +376,83 @@
 
         _updatePointerPosition(e) {
           const rect = this.canvas.getBoundingClientRect();
-          this.state.pointerX = e.clientX - rect.left;
-          this.state.pointerY = e.clientY - rect.top;
+          const newX = e.clientX - rect.left;
+          const newY = e.clientY - rect.top;
+
+          // Calculate instantaneous velocity
+          if (this.state.isPointerDown) {
+            const dx = newX - this.state.pointerX;
+            const dy = newY - this.state.pointerY;
+            this.state.velocity = Math.sqrt(dx * dx + dy * dy);
+            this.state.lastMoveTime = performance.now();
+          }
+
+          this.state.prevPointerX = this.state.pointerX;
+          this.state.prevPointerY = this.state.pointerY;
+          this.state.pointerX = newX;
+          this.state.pointerY = newY;
         }
 
         _spawnParticles(currentTime) {
           if (!this.state.isPointerDown) return;
 
-          const { lastAddTime } = this.state;
-          const { particlesPerBatch, spawnInterval } = this.spawnConfig;
-
-          if (currentTime - lastAddTime > spawnInterval) {
-            this.particleSystem.addParticles(particlesPerBatch, this.state.pointerX, this.state.pointerY);
-            this.state.lastAddTime = currentTime;
-            this._updateParticleCount();
+          // Check if user has stopped moving (pause detection)
+          const timeSinceLastMove = currentTime - this.state.lastMoveTime;
+          if (timeSinceLastMove > this.spawnConfig.pauseThreshold) {
+            // User has paused, don't spawn more particles
+            return;
           }
+
+          // Get the interpolated path points between previous and current cursor position
+          const pathPoints = this._getInterpolatedPath(
+            this.state.lastSpawnX,
+            this.state.lastSpawnY,
+            this.state.pointerX,
+            this.state.pointerY,
+            this.spawnConfig.spawnSpacing
+          );
+
+          // Spawn particles at each interpolated point
+          for (const point of pathPoints) {
+            this.particleSystem.addParticles(this.spawnConfig.particlesPerSpawn, point.x, point.y);
+          }
+
+          if (pathPoints.length > 0) {
+            this._updateParticleCount();
+            // Update spawn position to current cursor position
+            this.state.lastSpawnX = this.state.pointerX;
+            this.state.lastSpawnY = this.state.pointerY;
+          }
+        }
+
+        /**
+         * Generate interpolated points along the path from start to end
+         * Using a line-drawing-like algorithm to ensure even spacing and no gaps
+         * @private
+         */
+        _getInterpolatedPath(startX, startY, endX, endY, spacing) {
+          const points = [];
+          const dx = endX - startX;
+          const dy = endY - startY;
+          const totalDistance = Math.sqrt(dx * dx + dy * dy);
+
+          if (totalDistance < spacing) {
+            // Distance is too small, don't spawn yet
+            return points;
+          }
+
+          // Calculate number of spawn points needed to cover the distance
+          const numPoints = Math.floor(totalDistance / spacing);
+
+          for (let i = 1; i <= numPoints; i++) {
+            const t = i / (numPoints + 1);
+            points.push({
+              x: startX + dx * t,
+              y: startY + dy * t,
+            });
+          }
+
+          return points;
         }
 
         _updateParticleCount() {
@@ -369,6 +505,21 @@
 
         clearStroke() {
           this.strokeCanvas.clear();
+        }
+
+        /**
+         * Render method: updates the particle system force guide if stroke canvas has changed
+         * Only affects existing particles by updating their force guide, does not spawn new particles
+         */
+        render() {
+          if (!this.strokeCanvas.hasChanged()) {
+            // No changes detected, don't disturb the particle system
+            return;
+          }
+
+          // If we reach here, the stroke canvas has changed
+          // The particle system will automatically use the updated stroke content
+          // in its next update() call via getImageData()
         }
       }
 

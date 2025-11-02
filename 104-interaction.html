@@ -9,7 +9,8 @@
     <canvas id="particleCanvas" width="300" height="600" style="border: 4px double #000"></canvas>
     <canvas id="strokeCanvas" width="300" height="600" style="border: 4px double #000"></canvas>
     <br />
-    <button id="clearBtn">Clear</button>
+    <button id="clearParticlesBtn">Clear Particles</button>
+    <button id="clearStrokeBtn">Clear Stroke</button>
     <div>Particles: <span id="count">0</span></div>
     <div>FPS: <span id="fps">0</span></div>
 
@@ -277,7 +278,8 @@
           this.canvas.addEventListener("pointermove", (e) => this._onPointerMove(e));
           this.canvas.addEventListener("pointerup", () => this._onPointerUp());
           this.canvas.addEventListener("pointerout", () => this._onPointerUp());
-          document.getElementById("clearBtn").addEventListener("click", () => this.clear());
+          document.getElementById("clearParticlesBtn").addEventListener("click", () => this.clearParticles());
+          document.getElementById("clearStrokeBtn").addEventListener("click", () => this.clearStroke());
         }
 
         _onPointerDown(e) {
@@ -356,6 +358,16 @@
           this.particleSystem.clear();
           this._updateParticleCount();
           this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          this.strokeCanvas.clear();
+        }
+
+        clearParticles() {
+          this.particleSystem.clear();
+          this._updateParticleCount();
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+
+        clearStroke() {
           this.strokeCanvas.clear();
         }
       }

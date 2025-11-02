@@ -1,7 +1,34 @@
 import { GoogleGenAI } from "@google/genai";
 import { AIConnection } from "./ai-connection";
 
-export async function generatePainting(aiConnection: AIConnection, imageData: string): Promise<string[]> {
+export async function generatePainting(aiConnection: AIConnection, description: string): Promise<string[]> {
+  const apiKey = aiConnection.getApiKey();
+  if (!apiKey) {
+    throw new Error("API key not found. Please connect to AI first.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const config = {
+    responseModalities: ["IMAGE"],
+  };
+  const model = "gemini-2.5-flash-image-preview";
+
+  const response = await ai.models.generateContent({
+    model,
+    config,
+    contents: [
+      { role: "model", parts: [{ text: "Create a minimalist traditional Chinese painting based on description. Do NOT include calligraphy, text, seal. " }] },
+      { role: "user", parts: [{ text: description }] },
+    ],
+  });
+
+  const inlinedata = response.candidates?.at(0)?.content?.parts?.find((part) => part.inlineData)?.inlineData;
+  if (!inlinedata) return [];
+  const imageUrl = `data:${inlinedata.mimeType};base64,${inlinedata.data}`;
+  return [imageUrl];
+}
+
+export async function editPainting(aiConnection: AIConnection, imageData: string, description: string): Promise<string[]> {
   const apiKey = aiConnection.getApiKey();
   if (!apiKey) {
     throw new Error("API key not found. Please connect to AI first.");
@@ -28,6 +55,14 @@ export async function generatePainting(aiConnection: AIConnection, imageData: st
 
   const contents = [
     {
+      role: "model",
+      parts: [
+        {
+          text: "Paint the red rectangle area with a concept described by the user. Do NOT include calligraphy, text, or seal. Convert the user provided concept into painting with a style is consistent with the rest of the painting.",
+        },
+      ],
+    },
+    {
       role: "user",
       parts: [
         {
@@ -37,33 +72,20 @@ export async function generatePainting(aiConnection: AIConnection, imageData: st
           },
         },
         {
-          text: "Transform this image into a beautiful artistic painting",
+          text: description,
         },
       ],
     },
   ];
 
-  const response = await ai.models.generateContentStream({
+  const response = await ai.models.generateContent({
     model,
     config,
     contents,
   });
 
-  const imageUrls: string[] = [];
-  for await (const chunk of response) {
-    if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
-      continue;
-    }
-
-    const parts = chunk.candidates[0].content.parts;
-    for (const part of parts) {
-      if (part.inlineData) {
-        const { mimeType: mt, data: d } = part.inlineData;
-        const imageUrl = `data:${mt};base64,${d}`;
-        imageUrls.push(imageUrl);
-      }
-    }
-  }
-
-  return imageUrls;
+  const inlinedata = response.candidates?.at(0)?.content?.parts?.find((part) => part.inlineData)?.inlineData;
+  if (!inlinedata) return [];
+  const imageUrl = `data:${inlinedata.mimeType};base64,${inlinedata.data}`;
+  return [imageUrl];
 }

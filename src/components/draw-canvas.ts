@@ -20,8 +20,8 @@ export class DrawingCanvas extends EventTarget {
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.canvas.addEventListener("pointerdown", (e: PointerEvent) => this.startDrawing(e));
     this.canvas.addEventListener("pointermove", (e: PointerEvent) => this.draw(e));
-    this.canvas.addEventListener("pointerup", () => this.stopDrawing());
-    this.canvas.addEventListener("pointerout", () => this.completeDrawing());
+    this.canvas.addEventListener("pointerup", () => this.handlePointerup());
+    this.canvas.addEventListener("pointerout", () => this.handleFinishDrawing());
   }
 
   get element(): HTMLCanvasElement {
@@ -52,19 +52,46 @@ export class DrawingCanvas extends EventTarget {
     this.ctx.stroke();
   }
 
-  private stopDrawing(): void {
+  private handlePointerup(): void {
     this.isDrawing = false;
     this.hasDrawn = true;
   }
 
-  private completeDrawing(): void {
+  private handleFinishDrawing(): void {
     if (this.hasDrawn && !this.dispatched) {
       this.dispatchEvent(new CustomEvent("drawingstop"));
       this.dispatched = true;
     }
   }
 
-  consume(): void {
+  getBoundingBox(): { x: number; y: number; width: number; height: number } | null {
+    const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+    const data = imageData.data;
+    let minX = this.canvas.width;
+    let minY = this.canvas.height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < this.canvas.height; y++) {
+      for (let x = 0; x < this.canvas.width; x++) {
+        const index = (y * this.canvas.width + x) * 4;
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+        if (r !== 255 || g !== 255 || b !== 255) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    if (maxX === -1) return null;
+    return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+  }
+
+  clear(): void {
     this.ctx.fillStyle = "white";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.hasDrawn = false;

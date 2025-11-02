@@ -11,5 +11,11 @@
   "devDependencies": {
     "typescript": "~5.9.3",
     "vite": "^7.1.7"
+  },
+  "dependencies": {
+    "@google/genai": "^1.28.0",
+    "@types/node": "^24.9.2",
+    "lit-html": "^3.3.1",
+    "rxjs": "^7.8.2"
   }
 }

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dual Canvas Drawing</title>
+  </head>
+  <body>
+    <canvas id="DrawCanvas" width="300" height="600" style="border: 1px solid black"></canvas>
+    <canvas id="GenerativeCanvas" width="300" height="600" style="border: 1px solid black"></canvas>
+    <canvas id="StylizeCanvas" width="300" height="600" style="border: 1px solid black"></canvas>
+    <canvas id="AnimateCanvas" width="300" height="600" style="border: 1px solid black"></canvas>
+    <br />
+    <button commandfor="connection-dialog" command="show-modal">Setup</button>
+
+    <dialog class="connection-form" id="connection-dialog">
+      <div class="connections-dialog-body">
+        <form method="dialog" id="ai-connection-form">
+          <h2>Google AI Studio Connection</h2>
+          <label for="api-key-input">API Key:</label>
+          <input type="password" id="api-key-input" placeholder="Enter your Google AI Studio API key" />
+          <button type="button" id="connect-btn">Connect</button>
+          <button type="button" id="disconnect-btn" style="display: none">Disconnect</button>
+          <button type="submit">Close</button>
+          <div id="connection-status"></div>
+        </form>
+      </div>
+    </dialog>
+    <script src="src/pipeline.ts" type="module"></script>
+  </body>
+</html>

@@ -10,10 +10,8 @@ export async function main() {
 
   const program$ = fromEvent(drawCanvas, "drawingstop").pipe(
     mergeMap(() => {
-      const image = drawCanvas.readImage();
-      const dataUrl = convertToBase64url(image);
-      console.log("Image Data URL:", dataUrl);
-
+      const dataUrl = convertToBase64url(drawCanvas.element);
+      drawCanvas.consume();
       return identifyCharacter(connection, dataUrl);
     }),
     tap((result) => {

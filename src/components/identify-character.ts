@@ -16,14 +16,14 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
   // Parse the image data (assuming it's a data URL like data:image/jpeg;base64,...)
   let data: string;
   let mimeType: string;
-  if (imageData.startsWith('data:')) {
-    const [mime, base64] = imageData.split(',');
-    mimeType = mime.split(':')[1].split(';')[0];
+  if (imageData.startsWith("data:")) {
+    const [mime, base64] = imageData.split(",");
+    mimeType = mime.split(":")[1].split(";")[0];
     data = base64;
   } else {
     // Assume it's raw base64 data
     data = imageData;
-    mimeType = 'image/jpeg'; // Default assumption
+    mimeType = "image/jpeg"; // Default assumption
   }
 
   const contents = [
@@ -37,7 +37,12 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
           },
         },
         {
-          text: "Identify the Chinese calligraphy character in this image. Provide the character itself and its English translation.",
+          text: `Identify the Chinese calligraphy character in this image. Respond only with the character in Chinese and in English. In this format:
+"""
+Character: <Chinese Character>
+Meaning: <English Meaning>
+"""
+Do not include any other text.`,
         },
       ],
     },

@@ -16,8 +16,6 @@ export class DrawingCanvas extends EventTarget {
     this.ctx.lineWidth = 2;
     this.ctx.lineCap = "round";
     this.ctx.strokeStyle = "#000";
-    this.ctx.fillStyle = "white";
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.canvas.addEventListener("pointerdown", (e: PointerEvent) => this.startDrawing(e));
     this.canvas.addEventListener("pointermove", (e: PointerEvent) => this.draw(e));
     this.canvas.addEventListener("pointerup", () => this.handlePointerup());
@@ -30,6 +28,17 @@ export class DrawingCanvas extends EventTarget {
 
   readImage() {
     return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  readBase64DataUrl(): string {
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = this.canvas.width;
+    tempCanvas.height = this.canvas.height;
+    const tempCtx = tempCanvas.getContext("2d")!;
+    tempCtx.fillStyle = "white";
+    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.drawImage(this.canvas, 0, 0);
+    return tempCanvas.toDataURL();
   }
 
   writeImage(data: ImageData): void {
@@ -92,8 +101,7 @@ export class DrawingCanvas extends EventTarget {
   }
 
   clear(): void {
-    this.ctx.fillStyle = "white";
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.hasDrawn = false;
     this.dispatched = false;
   }

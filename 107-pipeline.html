@@ -4,12 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dual Canvas Drawing</title>
+    <style>
+      .canvas-stack {
+        position: relative;
+        width: 360px;
+        height: 640px;
+      }
+
+      .canvas-stack canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+    </style>
   </head>
   <body>
-    <canvas id="DrawCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
-    <canvas id="GenerativeCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
-    <canvas id="StylizeCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
-    <canvas id="AnimateCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
+    <div class="canvas-stack">
+      <canvas id="GenerativeCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
+      <canvas id="CharacterCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
+      <canvas id="DrawCanvas" width="360" height="640" style="border: 1px solid black"></canvas>
+    </div>
     <br />
     <button commandfor="connection-dialog" command="show-modal">Setup</button>
 

@@ -17,8 +17,15 @@ export async function generatePainting(aiConnection: AIConnection, description: 
     model,
     config,
     contents: [
-      { role: "model", parts: [{ text: "Create a minimalist traditional Chinese painting based on description. Do NOT include calligraphy, text, seal. " }] },
-      { role: "user", parts: [{ text: description }] },
+      {
+        role: "model",
+        parts: [
+          {
+            text: "Create a minimalist traditional Chinese painting based on description. Do NOT include calligraphy, text, seal. Convert the user provided concept into graphical representation",
+          },
+        ],
+      },
+      { role: "user", parts: [{ text: `Paint the concept based on the follow character and its meaning:\n${description}` }] },
     ],
   });
 

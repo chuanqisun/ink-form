@@ -39,8 +39,7 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
         {
           text: `Identify the Chinese calligraphy character in this image. Respond only with the character in Chinese and in English. In this format:
 """
-Character: <Chinese Character>
-Meaning: <English Meaning>
+Concept: <Chinese Character> (<English Meaning>)
 """
 Do not include any other text.`,
         },

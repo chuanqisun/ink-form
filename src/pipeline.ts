@@ -1,19 +1,21 @@
 import { concatMap, EMPTY, from, fromEvent, mergeMap, take } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
+import { CharacterCanvas } from "./components/base-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
 import { identifyCharacter } from "./components/identify-character";
-import { convertToBase64url } from "./components/image-data";
 
 export async function main() {
   const connection = new AIConnection();
   const drawCanvas = new DrawingCanvas("DrawCanvas");
   const generativeCanvas = new GenerativeCanvas("GenerativeCanvas");
+  const characterCanvas = new CharacterCanvas("CharacterCanvas");
 
   const program$ = fromEvent(drawCanvas, "drawingstop").pipe(
     mergeMap(() => {
-      const dataUrl = convertToBase64url(drawCanvas.element);
+      characterCanvas.writeImage(drawCanvas.readImage());
+      const dataUrl = drawCanvas.readBase64DataUrl();
       const boundingBox = drawCanvas.getBoundingBox();
       drawCanvas.clear();
       if (!boundingBox) return EMPTY;
@@ -24,6 +26,7 @@ export async function main() {
       }));
     }),
     concatMap((result) => {
+      console.log("Character", result.character);
       const isEmpty = generativeCanvas.isCanvasEmpty();
       const overlayImage = isEmpty ? null : generativeCanvas.getOverlayImage(result.box);
       console.log("Overlay Image:", overlayImage);

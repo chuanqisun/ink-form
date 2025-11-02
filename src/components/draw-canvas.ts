@@ -30,13 +30,15 @@ export class DrawingCanvas extends EventTarget {
     return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  readBase64DataUrl(): string {
+  readBase64DataUrl(transparency?: boolean): string {
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = this.canvas.width;
     tempCanvas.height = this.canvas.height;
     const tempCtx = tempCanvas.getContext("2d")!;
-    tempCtx.fillStyle = "white";
-    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    if (!transparency) {
+      tempCtx.fillStyle = "white";
+      tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    }
     tempCtx.drawImage(this.canvas, 0, 0);
     return tempCanvas.toDataURL();
   }

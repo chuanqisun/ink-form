@@ -1,5 +1,6 @@
 import { concatMap, EMPTY, from, fromEvent, map, mergeMap, take } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
+import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
@@ -12,24 +13,18 @@ export async function main() {
 
   const program$ = fromEvent(drawCanvas, "drawingstop").pipe(
     mergeMap(() => {
-      const charCanvas = document.createElement("canvas");
-      charCanvas.width = 360;
-      charCanvas.height = 640;
-      charCanvas.style.position = "absolute";
-      charCanvas.style.top = "0";
-      charCanvas.style.left = "0";
-      charCanvas.style.border = "1px solid black";
       const stack = document.querySelector(".canvas-stack")!;
-      stack.insertBefore(charCanvas, drawCanvas.element);
-      const ctx = charCanvas.getContext("2d")!;
-      ctx.putImageData(drawCanvas.readImage(), 0, 0);
+
       const dataUrl = drawCanvas.readBase64DataUrl();
       const boundingBox = drawCanvas.getBoundingBox();
-      drawCanvas.clear();
       if (!boundingBox) {
-        charCanvas.remove();
         return EMPTY;
       }
+
+      const charCanvasElement = CharacterCanvas.createElement(`CharacterCanvas-${Date.now()}`);
+      stack.insertBefore(charCanvasElement, drawCanvas.element);
+      const charCanvas = new CharacterCanvas(charCanvasElement.id);
+      charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
       return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ character: char, box: boundingBox, charCanvas })));
     }),
     concatMap((result) => {
@@ -42,7 +37,7 @@ export async function main() {
         take(1),
         concatMap(async (imageUrl) => {
           await generativeCanvas.writeDataUrl(imageUrl);
-          result.charCanvas.remove();
+          result.charCanvas.destroy();
         })
       );
     })

@@ -273,6 +273,7 @@
             data[i * 4] = bw;
             data[i * 4 + 1] = bw;
             data[i * 4 + 2] = bw;
+            data[i * 4 + 3] = 255; // Ensure alpha is fully opaque
           }
 
           return {
@@ -316,6 +317,23 @@
           this.ctx.lineWidth = strokeWidth;
           this.ctx.lineCap = "round";
           this.ctx.strokeStyle = "#000";
+          this.listeners = {
+            strokeUpdated: [],
+            imageLoaded: [],
+          };
+        }
+
+        // Event system for decoupling
+        on(event, callback) {
+          if (this.listeners[event]) {
+            this.listeners[event].push(callback);
+          }
+        }
+
+        emit(event, data) {
+          if (this.listeners[event]) {
+            this.listeners[event].forEach((callback) => callback(data));
+          }
         }
 
         startDrawing(x, y) {
@@ -328,14 +346,17 @@
           if (!this.isDrawing) return;
           this.ctx.lineTo(x, y);
           this.ctx.stroke();
+          this.emit("strokeUpdated", { type: "draw" });
         }
 
         stopDrawing() {
           this.isDrawing = false;
+          this.emit("strokeUpdated", { type: "complete" });
         }
 
         clear() {
           this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          this.emit("strokeUpdated", { type: "clear" });
         }
 
         getImageData() {
@@ -351,10 +372,13 @@
             const { imageData, scaledWidth, scaledHeight, offsetX, offsetY } = await ImageProcessor.processImage(blob, this.canvas.width, this.canvas.height);
 
             // Clear canvas first
-            this.clear();
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
             // Apply processed guide strokes to canvas
             ImageProcessor.applyGuidesToCanvas(this.ctx, imageData, imageData.width, imageData.height, offsetX, offsetY, scaledWidth, scaledHeight);
+
+            // Emit event for new image loaded
+            this.emit("imageLoaded", { imageData, scaledWidth, scaledHeight, offsetX, offsetY });
           } catch (error) {
             console.error("Failed to process image:", error);
           }
@@ -388,11 +412,64 @@
 
           // Cache for force field calculations
           this.distanceField = null;
+          this.nearestStrokeX = null;
+          this.nearestStrokeY = null;
           this.gradientField = null;
           this.lastStrokeUpdate = 0;
 
           this.initEventListeners();
+          this.setupStrokeCanvasListeners();
           this.animate();
+        }
+
+        /**
+         * Setup listeners for stroke canvas events (decoupled communication)
+         */
+        setupStrokeCanvasListeners() {
+          // Listen for new image loaded events
+          this.strokeCanvas.on("imageLoaded", () => {
+            this.handleNewGuideImage();
+          });
+
+          // Listen for stroke updates to invalidate cache
+          this.strokeCanvas.on("strokeUpdated", ({ type }) => {
+            if (type === "clear") {
+              this.particles = [];
+              document.getElementById("count").textContent = 0;
+              // Invalidate force field cache on clear
+              this.distanceField = null;
+              this.gradientField = null;
+            }
+          });
+        }
+
+        /**
+         * Handle new guide image by resetting all particles to diffusion phase
+         * This naturally triggers phases 1 and 2 to re-run
+         */
+        handleNewGuideImage() {
+          const now = performance.now();
+          const particleCount = this.particles.length;
+
+          // Reset all existing particles to start fresh diffusion
+          this.particles.forEach((particle) => {
+            particle.birthTime = now;
+            particle.phase = "diffusion";
+
+            // Give particles new random initial velocities for diffusion
+            const speed = 3 + Math.random() * 2;
+            const angle = Math.random() * Math.PI * 2;
+            particle.vx = Math.cos(angle) * speed;
+            particle.vy = Math.sin(angle) * speed;
+          });
+
+          // Invalidate force field cache to rebuild with new image
+          this.distanceField = null;
+          this.nearestStrokeX = null;
+          this.nearestStrokeY = null;
+          this.gradientField = null;
+
+          console.log(`New guide image loaded - ${particleCount} particles reset to diffusion phase`);
         }
 
         initEventListeners() {
@@ -495,11 +572,17 @@
 
               // If there's a stroke at this position, create a particle
               if (alpha > 0) {
+                // Phase 1: Diffusion - particles start with significant initial velocity
+                const speed = 3 + Math.random() * 2; // Random speed between 3-5
+                const angle = Math.random() * Math.PI * 2; // Random direction
+
                 this.particles.push({
                   x: x,
                   y: y,
-                  vx: (Math.random() - 0.5) * 0.5,
-                  vy: (Math.random() - 0.5) * 0.5,
+                  vx: Math.cos(angle) * speed,
+                  vy: Math.sin(angle) * speed,
+                  birthTime: performance.now(), // Track when particle was created
+                  phase: "diffusion", // Start in diffusion phase
                 });
                 particlesAdded++;
               }
@@ -513,48 +596,92 @@
         }
 
         /**
-         * Compute distance transform using fast approximation
-         * Returns array where each pixel stores distance to nearest stroke pixel
+         * Compute distance transform AND nearest stroke pixel for each position
+         * Returns object with distance field and nearest pixel coordinates (global analysis)
          */
         computeDistanceField(strokeData, width, height) {
           const dist = new Float32Array(width * height);
+          const nearestX = new Int16Array(width * height);
+          const nearestY = new Int16Array(width * height);
           const INF = width + height; // Large enough value
 
-          // Initialize distances
-          for (let i = 0; i < dist.length; i++) {
-            const alpha = strokeData[i * 4 + 3];
-            dist[i] = alpha > 0 ? 0 : INF;
+          // Initialize distances and nearest pixels
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const i = y * width + x;
+              const alpha = strokeData[i * 4 + 3];
+              if (alpha > 0) {
+                dist[i] = 0;
+                nearestX[i] = x;
+                nearestY[i] = y;
+              } else {
+                dist[i] = INF;
+                nearestX[i] = -1;
+                nearestY[i] = -1;
+              }
+            }
           }
 
-          // Forward pass
+          // Forward pass - propagate nearest stroke pixel info
           for (let y = 1; y < height; y++) {
             for (let x = 1; x < width; x++) {
               const i = y * width + x;
               if (dist[i] > 0) {
-                const d1 = dist[i - 1] + 1; // left
-                const d2 = dist[i - width] + 1; // top
-                const d3 = dist[i - width - 1] + 1.414; // top-left
-                const d4 = dist[i - width + 1] + 1.414; // top-right
-                dist[i] = Math.min(dist[i], d1, d2, d3, d4);
+                // Check neighbors and update if they provide shorter path
+                const neighbors = [
+                  { idx: i - 1, dx: 1, dy: 0 }, // left
+                  { idx: i - width, dx: 0, dy: 1 }, // top
+                  { idx: i - width - 1, dx: 1, dy: 1 }, // top-left
+                  { idx: i - width + 1, dx: -1, dy: 1 }, // top-right
+                ];
+
+                for (const { idx, dx, dy } of neighbors) {
+                  if (nearestX[idx] >= 0) {
+                    const nx = nearestX[idx];
+                    const ny = nearestY[idx];
+                    const newDist = Math.sqrt((x - nx) ** 2 + (y - ny) ** 2);
+
+                    if (newDist < dist[i]) {
+                      dist[i] = newDist;
+                      nearestX[i] = nx;
+                      nearestY[i] = ny;
+                    }
+                  }
+                }
               }
             }
           }
 
-          // Backward pass
+          // Backward pass - refine nearest stroke pixel info
           for (let y = height - 2; y >= 0; y--) {
             for (let x = width - 2; x >= 0; x--) {
               const i = y * width + x;
               if (dist[i] > 0) {
-                const d1 = dist[i + 1] + 1; // right
-                const d2 = dist[i + width] + 1; // bottom
-                const d3 = dist[i + width + 1] + 1.414; // bottom-right
-                const d4 = dist[i + width - 1] + 1.414; // bottom-left
-                dist[i] = Math.min(dist[i], d1, d2, d3, d4);
+                const neighbors = [
+                  { idx: i + 1, dx: -1, dy: 0 }, // right
+                  { idx: i + width, dx: 0, dy: -1 }, // bottom
+                  { idx: i + width + 1, dx: -1, dy: -1 }, // bottom-right
+                  { idx: i + width - 1, dx: 1, dy: -1 }, // bottom-left
+                ];
+
+                for (const { idx, dx, dy } of neighbors) {
+                  if (nearestX[idx] >= 0) {
+                    const nx = nearestX[idx];
+                    const ny = nearestY[idx];
+                    const newDist = Math.sqrt((x - nx) ** 2 + (y - ny) ** 2);
+
+                    if (newDist < dist[i]) {
+                      dist[i] = newDist;
+                      nearestX[i] = nx;
+                      nearestY[i] = ny;
+                    }
+                  }
+                }
               }
             }
           }
 
-          return dist;
+          return { dist, nearestX, nearestY };
         }
 
         /**
@@ -598,7 +725,10 @@
          * Update force field cache when strokes change
          */
         updateForceFieldCache(strokeData, width, height) {
-          this.distanceField = this.computeDistanceField(strokeData, width, height);
+          const result = this.computeDistanceField(strokeData, width, height);
+          this.distanceField = result.dist;
+          this.nearestStrokeX = result.nearestX;
+          this.nearestStrokeY = result.nearestY;
           this.gradientField = this.computeGradientField(this.distanceField, width, height);
         }
 
@@ -616,22 +746,61 @@
           }
 
           for (const p of this.particles) {
-            // Apply improved force field
-            this.applyForceFieldImproved(p, width, height);
+            const age = (now - p.birthTime) / 1000; // Age in seconds
 
-            // Reduced randomness for more predictable behavior
-            p.vx += (Math.random() - 0.5) * 0.5;
-            p.vy += (Math.random() - 0.5) * 0.5;
+            // Phase transition timing
+            const diffusionDuration = 0.5; // 0.5 seconds of diffusion
+            const stabilizationDuration = 2.0; // 2 seconds to fully stabilize
 
-            // Damping
-            p.vx *= 0.98;
-            p.vy *= 0.98;
+            // Calculate progress through phases (0 = start diffusion, 1 = fully stabilized)
+            const totalDuration = diffusionDuration + stabilizationDuration;
+            const progress = Math.min(age / totalDuration, 1);
+
+            // Phase 1: Diffusion (0 to diffusionDuration seconds)
+            if (age < diffusionDuration) {
+              p.phase = "diffusion";
+
+              // High randomness during diffusion
+              const randomStrength = 2.0 * (1 - age / diffusionDuration); // Decreases over time
+              p.vx += (Math.random() - 0.5) * randomStrength;
+              p.vy += (Math.random() - 0.5) * randomStrength;
+
+              // Minimal damping - let particles spread
+              p.vx *= 0.98;
+              p.vy *= 0.98;
+            }
+            // Phase 2: Stabilization (diffusionDuration to totalDuration seconds)
+            else {
+              p.phase = "stabilization";
+
+              // Calculate stabilization progress (0 = just started, 1 = fully stabilized)
+              const stabilizationProgress = (age - diffusionDuration) / stabilizationDuration;
+              const stabilizationFactor = Math.min(stabilizationProgress, 1);
+
+              // Apply force field with increasing strength as stabilization progresses
+              this.applyStabilizationForce(p, width, height, stabilizationFactor);
+
+              // Reduce randomness as stabilization progresses
+              const randomStrength = 0.5 * (1 - stabilizationFactor);
+              p.vx += (Math.random() - 0.5) * randomStrength;
+              p.vy += (Math.random() - 0.5) * randomStrength;
+
+              // Increase damping as stabilization progresses
+              const dampingFactor = 0.98 - stabilizationFactor * 0.15; // 0.98 to 0.83
+              p.vx *= dampingFactor;
+              p.vy *= dampingFactor;
+
+              // Final stabilization: snap to nearest stroke pixel
+              if (stabilizationFactor > 0.95) {
+                this.snapToStroke(p, strokeData, width, height);
+              }
+            }
 
             // Update position
             p.x += p.vx;
             p.y += p.vy;
 
-            // Boundary conditions
+            // Boundary conditions with bounce
             if (p.x < 0 || p.x > this.canvas.width) {
               p.vx *= -0.8;
               p.x = Math.max(0, Math.min(this.canvas.width, p.x));
@@ -644,9 +813,13 @@
         }
 
         /**
-         * Improved force field using distance transform and gradients
+         * Apply stabilization force - particles gradually move toward nearest stroke
+         * @param {Object} particle - The particle to apply force to
+         * @param {number} width - Canvas width
+         * @param {number} height - Canvas height
+         * @param {number} stabilizationFactor - 0 (just started) to 1 (fully stabilized)
          */
-        applyForceFieldImproved(particle, width, height) {
+        applyStabilizationForce(particle, width, height, stabilizationFactor) {
           const x = Math.floor(particle.x);
           const y = Math.floor(particle.y);
 
@@ -661,33 +834,77 @@
           const gradX = this.gradientField.gradX[i];
           const gradY = this.gradientField.gradY[i];
 
-          // If particle is far from any stroke, apply strong attraction
-          if (distance > 5) {
-            const strength = 0.8; // Stronger force for distant particles
-            const magnitude = Math.sqrt(gradX * gradX + gradY * gradY);
+          // Force strength increases as stabilization progresses
+          const baseStrength = 0.1 + stabilizationFactor * 1.5; // 0.1 to 1.6
 
-            if (magnitude > 0.01) {
-              // Normalize and apply force toward stroke
-              particle.vx -= (gradX / magnitude) * strength;
-              particle.vy -= (gradY / magnitude) * strength;
-            }
+          // Distance-based force adjustment
+          let strength = baseStrength;
+          if (distance > 10) {
+            // Far particles need stronger pull
+            strength *= 2;
+          } else if (distance < 2) {
+            // Close particles need gentle adjustment
+            strength *= 0.5;
           }
-          // If particle is near a stroke, apply weaker force for smooth settling
-          else if (distance > 1) {
-            const strength = 0.3;
-            const magnitude = Math.sqrt(gradX * gradX + gradY * gradY);
 
-            if (magnitude > 0.01) {
-              particle.vx -= (gradX / magnitude) * strength;
-              particle.vy -= (gradY / magnitude) * strength;
-            }
+          const magnitude = Math.sqrt(gradX * gradX + gradY * gradY);
+
+          if (magnitude > 0.01) {
+            // Normalize and apply force toward stroke
+            particle.vx -= (gradX / magnitude) * strength;
+            particle.vy -= (gradY / magnitude) * strength;
           }
-          // If particle is on or very close to stroke, minimal force
-          else {
-            // Slight repulsion from exact stroke position to prevent clumping
-            const strength = 0.05;
-            particle.vx += (Math.random() - 0.5) * strength;
-            particle.vy += (Math.random() - 0.5) * strength;
+        }
+
+        /**
+         * Snap particle to the nearest stroke pixel (final stabilization using global position)
+         * @param {Object} particle - The particle to snap
+         * @param {Uint8ClampedArray} strokeData - Stroke canvas image data
+         * @param {number} width - Canvas width
+         * @param {number} height - Canvas height
+         */
+        snapToStroke(particle, strokeData, width, height) {
+          const x = Math.floor(particle.x);
+          const y = Math.floor(particle.y);
+
+          // Bounds check
+          if (x < 0 || x >= width || y < 0 || y >= height) return;
+
+          const i = y * width + x;
+
+          // If already on a stroke, lock in place
+          if (strokeData[i * 4 + 3] > 0) {
+            particle.vx *= 0.1;
+            particle.vy *= 0.1;
+            return;
+          }
+
+          // Use global nearest stroke position
+          if (!this.nearestStrokeX || !this.nearestStrokeY) return;
+
+          const nearestX = this.nearestStrokeX[i];
+          const nearestY = this.nearestStrokeY[i];
+
+          if (nearestX < 0 || nearestY < 0) return;
+
+          // Calculate direct vector to nearest stroke pixel
+          const dx = nearestX - particle.x;
+          const dy = nearestY - particle.y;
+          const distToTarget = Math.sqrt(dx * dx + dy * dy);
+
+          // If very close, snap directly to target
+          if (distToTarget < 2) {
+            // Strong pull toward exact stroke position
+            particle.vx = dx * 0.5;
+            particle.vy = dy * 0.5;
+
+            // If extremely close, lock position
+            if (distToTarget < 0.5) {
+              particle.x = nearestX;
+              particle.y = nearestY;
+              particle.vx = 0;
+              particle.vy = 0;
+            }
           }
         }
 

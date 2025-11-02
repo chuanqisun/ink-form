@@ -102,10 +102,8 @@ export class DrawingCanvas extends EventTarget {
     for (let y = 0; y < this.canvas.height; y++) {
       for (let x = 0; x < this.canvas.width; x++) {
         const index = (y * this.canvas.width + x) * 4;
-        const r = data[index];
-        const g = data[index + 1];
-        const b = data[index + 2];
-        if (r !== 255 || g !== 255 || b !== 255) {
+        const alpha = data[index + 3];
+        if (alpha > 0) {
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;

@@ -10,6 +10,7 @@ export async function main() {
   const connection = new AIConnection();
   const drawCanvas = new DrawingCanvas("DrawCanvas");
   const generativeCanvas = new GenerativeCanvas("GenerativeCanvas");
+  const debugCanvas = new CharacterCanvas("debug");
 
   const program$ = fromEvent(drawCanvas, "drawingstop").pipe(
     mergeMap(() => {
@@ -31,7 +32,8 @@ export async function main() {
       console.log("Character", result.character);
       const isEmpty = generativeCanvas.isCanvasEmpty();
       const overlayImage = isEmpty ? null : generativeCanvas.getOverlayImage(result.box);
-      console.log("Overlay Image:", overlayImage);
+      console.log("Overlay Image:", { overlayImage, result });
+      if (overlayImage) debugCanvas.writeDataUrl(overlayImage);
       return from(overlayImage ? editPainting(connection, overlayImage, result.character) : generatePainting(connection, result.character)).pipe(
         concatMap((imageUrls) => from(imageUrls)),
         take(1),

@@ -32,6 +32,10 @@
         left: 0;
         touch-action: none;
       }
+
+      #debug {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -41,6 +45,8 @@
     </div>
     <br />
     <button commandfor="connection-dialog" command="show-modal">Setup</button>
+    <br />
+    <canvas id="debug" width="360" height="640"></canvas>
 
     <dialog class="connection-form" id="connection-dialog">
       <div class="connections-dialog-body">

@@ -22,6 +22,7 @@ export function generateSoundEffect(connection: AIConnection, text: string, audi
         const stream = await elevenlabs.textToSoundEffects.convert({
           text,
           durationSeconds: 4,
+          promptInfluence: 0.8,
           outputFormat: "mp3_44100_128",
         });
 
@@ -123,6 +124,13 @@ export class Soundscape {
       const now = this.audioContext.currentTime;
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(1, now + fadeTime);
+
+      if (loopCount !== -1 && source.buffer) {
+        const duration = source.buffer.duration;
+        const fadeOutStart = Math.max(fadeTime, duration - fadeTime);
+        gain.gain.linearRampToValueAtTime(1, now + fadeOutStart);
+        gain.gain.linearRampToValueAtTime(0, now + duration);
+      }
 
       const voice = { source, gain };
       this.activeVoices.add(voice);

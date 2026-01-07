@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, type GenerateContentConfig } from "@google/genai";
 import { AIConnection } from "./ai-connection";
 
 export async function identifyCharacter(aiConnection: AIConnection, imageData: string): Promise<string> {
@@ -8,10 +8,10 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const config = {
+  const config: GenerateContentConfig = {
     responseModalities: ["TEXT"],
   };
-  const model = "gemini-2.5-flash-image-preview";
+  const model = "gemini-2.5-flash-image";
 
   // Parse the image data (assuming it's a data URL like data:image/jpeg;base64,...)
   let data: string;
@@ -47,6 +47,7 @@ Do not include any other text.`,
     },
   ];
 
+  console.time("identifyCharacter");
   const response = await ai.models.generateContentStream({
     model,
     config,
@@ -59,6 +60,7 @@ Do not include any other text.`,
       result += chunk.text;
     }
   }
+  console.timeEnd("identifyCharacter");
 
   return result.trim();
 }

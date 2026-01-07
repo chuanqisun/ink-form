@@ -19,12 +19,16 @@
       .canvas-stack {
         position: relative;
         margin: auto;
-        width: 360px;
-        height: 640px;
+        /* width: 360px;
+        height: 640px; */
 
         canvas {
           border: 4px double black;
           touch-action: none;
+        }
+
+        canvas:not(#DrawCanvas) {
+          pointer-events: none;
         }
 
         &:not(.debug) {
@@ -41,7 +45,24 @@
 
         &.debug {
           display: grid;
+          grid-template: "draw outline render" auto / 360px 360px 360px;
           gap: 16px;
+
+          #debug {
+            grid-area: outline;
+          }
+
+          #DrawCanvas {
+            grid-area: draw;
+          }
+
+          #GenerativeCanvas {
+            grid-area: render;
+          }
+
+          .character-canvas {
+            grid-area: outline;
+          }
         }
       }
 

@@ -25,7 +25,9 @@ export async function main() {
       }
 
       const charCanvasElement = CharacterCanvas.createElement(`CharacterCanvas-${Date.now()}`);
-      stack.insertBefore(charCanvasElement, drawCanvas.element);
+      const next = drawCanvas.element.nextSibling;
+      if (next) stack.insertBefore(charCanvasElement, next);
+      else stack.appendChild(charCanvasElement);
       const charCanvas = new CharacterCanvas(charCanvasElement.id);
       charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
       return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ character: char, box: boundingBox, charCanvas })));

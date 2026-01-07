@@ -5,11 +5,9 @@ export class CharacterCanvas extends EventTarget {
   static createElement(canvasId: string): HTMLCanvasElement {
     const charCanvas = document.createElement("canvas");
     charCanvas.id = canvasId;
+    charCanvas.classList.add("character-canvas");
     charCanvas.width = 360;
     charCanvas.height = 640;
-    charCanvas.style.position = "absolute";
-    charCanvas.style.top = "0";
-    charCanvas.style.left = "0";
 
     return charCanvas;
   }

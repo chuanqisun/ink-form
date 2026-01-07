@@ -122,13 +122,12 @@ export class Soundscape {
       gain.connect(this.audioContext.destination);
 
       const now = this.audioContext.currentTime;
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(1, now + fadeTime);
+      gain.gain.setValueAtTime(1, now);
 
       if (loopCount !== -1 && source.buffer) {
         const duration = source.buffer.duration;
-        const fadeOutStart = Math.max(fadeTime, duration - fadeTime);
-        gain.gain.linearRampToValueAtTime(1, now + fadeOutStart);
+        const fadeOutStart = Math.max(0, duration - fadeTime);
+        gain.gain.setValueAtTime(1, now + fadeOutStart);
         gain.gain.linearRampToValueAtTime(0, now + duration);
       }
 

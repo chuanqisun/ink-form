@@ -1,79 +1,79 @@
 export class AIConnection {
   private apiKey: string | null;
+  private elevenLabsApiKey: string | null;
   private isConnected: boolean;
 
   constructor() {
     this.apiKey = null;
+    this.elevenLabsApiKey = null;
     this.isConnected = false;
     this.initEventListeners();
     this.loadApiKey();
   }
 
   private initEventListeners(): void {
-    const connectBtn = document.getElementById("connect-btn") as HTMLButtonElement;
-    const disconnectBtn = document.getElementById("disconnect-btn") as HTMLButtonElement;
+    const resetBtn = document.getElementById("reset-btn") as HTMLButtonElement;
     const apiKeyInput = document.getElementById("api-key-input") as HTMLInputElement;
+    const elevenLabsApiKeyInput = document.getElementById("elevenlabs-api-key-input") as HTMLInputElement;
 
-    connectBtn.addEventListener("click", () => this.connect());
-    disconnectBtn.addEventListener("click", () => this.disconnect());
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => this.reset());
+    }
 
-    // Allow Enter key to connect
-    apiKeyInput.addEventListener("keypress", (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        this.connect();
-      }
-    });
+    if (apiKeyInput) {
+      apiKeyInput.addEventListener("input", () => {
+        this.apiKey = apiKeyInput.value.trim();
+        localStorage.setItem("google_ai_api_key", this.apiKey);
+        this.updateConnectionStatus();
+      });
+    }
+
+    if (elevenLabsApiKeyInput) {
+      elevenLabsApiKeyInput.addEventListener("input", () => {
+        this.elevenLabsApiKey = elevenLabsApiKeyInput.value.trim();
+        localStorage.setItem("elevenlabs_api_key", this.elevenLabsApiKey);
+        this.updateConnectionStatus();
+      });
+    }
   }
 
   private loadApiKey(): void {
     const stored = localStorage.getItem("google_ai_api_key");
+    const storedElevenLabs = localStorage.getItem("elevenlabs_api_key");
     if (stored) {
       this.apiKey = stored;
-      this.setConnected(true);
     }
+    if (storedElevenLabs) {
+      this.elevenLabsApiKey = storedElevenLabs;
+    }
+    this.updateConnectionStatus(true);
   }
 
-  private connect(): void {
-    const apiKeyInput = document.getElementById("api-key-input") as HTMLInputElement;
-    const apiKey = apiKeyInput.value.trim();
+  private updateConnectionStatus(updateInputs = false): void {
+    const hasGoogle = !!this.apiKey;
+    const hasEleven = !!this.elevenLabsApiKey;
+    this.isConnected = hasGoogle || hasEleven;
 
-    if (!apiKey) {
-      this.updateStatus("Please enter an API key", "error");
-      return;
+    if (updateInputs) {
+      const apiKeyInput = document.getElementById("api-key-input") as HTMLInputElement;
+      const elevenLabsApiKeyInput = document.getElementById("elevenlabs-api-key-input") as HTMLInputElement;
+      if (apiKeyInput) apiKeyInput.value = this.apiKey || "";
+      if (elevenLabsApiKeyInput) elevenLabsApiKeyInput.value = this.elevenLabsApiKey || "";
     }
 
-    // Store the API key
-    this.apiKey = apiKey;
-    localStorage.setItem("google_ai_api_key", apiKey);
-    this.setConnected(true);
-    this.updateStatus("Connected successfully!", "success");
-  }
-
-  private disconnect(): void {
-    this.apiKey = null;
-    localStorage.removeItem("google_ai_api_key");
-    this.setConnected(false);
-    (document.getElementById("api-key-input") as HTMLInputElement).value = "";
-    this.updateStatus("Disconnected", "info");
-  }
-
-  private setConnected(connected: boolean): void {
-    this.isConnected = connected;
-    const connectBtn = document.getElementById("connect-btn") as HTMLButtonElement;
-    const disconnectBtn = document.getElementById("disconnect-btn") as HTMLButtonElement;
-    const apiKeyInput = document.getElementById("api-key-input") as HTMLInputElement;
-
-    if (connected) {
-      connectBtn.style.display = "none";
-      disconnectBtn.style.display = "inline-block";
-      apiKeyInput.disabled = true;
-      apiKeyInput.value = this.apiKey!;
+    if (this.isConnected) {
+      this.updateStatus("Keys loaded", "success");
     } else {
-      connectBtn.style.display = "inline-block";
-      disconnectBtn.style.display = "none";
-      apiKeyInput.disabled = false;
-      apiKeyInput.value = "";
+      this.updateStatus("No keys configured", "info");
     }
+  }
+
+  private reset(): void {
+    this.apiKey = null;
+    this.elevenLabsApiKey = null;
+    localStorage.removeItem("google_ai_api_key");
+    localStorage.removeItem("elevenlabs_api_key");
+    this.updateConnectionStatus(true);
   }
 
   private updateStatus(message: string, type: "info" | "error" | "success" = "info"): void {
@@ -84,6 +84,10 @@ export class AIConnection {
 
   getApiKey() {
     return this.apiKey;
+  }
+
+  getElevenLabsApiKey() {
+    return this.elevenLabsApiKey;
   }
 
   isAPIConnected() {

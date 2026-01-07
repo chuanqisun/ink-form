@@ -113,11 +113,16 @@
     <dialog class="connection-form" id="connection-dialog">
       <div class="connections-dialog-body">
         <form method="dialog" id="ai-connection-form">
-          <h2>Google AI Studio Connection</h2>
-          <label for="api-key-input">API Key:</label>
-          <input type="password" id="api-key-input" placeholder="Enter your Google AI Studio API key" />
-          <button type="button" id="connect-btn">Connect</button>
-          <button type="button" id="disconnect-btn" style="display: none">Disconnect</button>
+          <h2>Connections</h2>
+          <div style="margin-bottom: 10px">
+            <label for="api-key-input">Google AI Studio API Key:</label>
+            <input type="password" id="api-key-input" placeholder="Enter your Google AI Studio API key" style="width: 100%" />
+          </div>
+          <div style="margin-bottom: 20px">
+            <label for="elevenlabs-api-key-input">ElevenLabs API Key:</label>
+            <input type="password" id="elevenlabs-api-key-input" placeholder="Enter your ElevenLabs API key" style="width: 100%" />
+          </div>
+          <button type="button" id="reset-btn">Reset</button>
           <button type="submit">Close</button>
           <div id="connection-status"></div>
         </form>

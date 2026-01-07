@@ -1,21 +1,10 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dual Canvas Drawing</title>
     <style>
-      .canvas-stack {
-        position: relative;
-        margin: auto;
-        width: 360px;
-        height: 640px;
-
-        canvas {
-          border: 4px double black;
-        }
-      }
-
       * {
         margin: 0;
         box-sizing: border-box;
@@ -27,27 +16,53 @@
         padding: 20px;
       }
 
-      .canvas-stack canvas {
-        position: absolute;
-        top: 0;
-        left: 0;
-        touch-action: none;
+      .canvas-stack {
+        position: relative;
+        margin: auto;
+        width: 360px;
+        height: 640px;
+
+        canvas {
+          border: 4px double black;
+          touch-action: none;
+        }
+
+        &:not(.debug) {
+          canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+          }
+
+          #debug {
+            display: none;
+          }
+        }
+
+        &.debug {
+          display: grid;
+          gap: 16px;
+        }
       }
 
-      #debug {
-        display: none;
+      .app-header {
+        position: fixed;
+        top: 0;
+        left: 0;
       }
     </style>
   </head>
   <body>
-    <div class="canvas-stack">
+    <header class="app-header">
+      <button commandfor="canvas-stack" command="--toggle-debug">Debug</button>
+      <button commandfor="connection-dialog" command="show-modal">Setup</button>
+    </header>
+
+    <div id="canvas-stack" class="canvas-stack">
+      <canvas id="debug" width="360" height="640"></canvas>
       <canvas id="GenerativeCanvas" width="360" height="640"></canvas>
       <canvas id="DrawCanvas" width="360" height="640"></canvas>
     </div>
-    <br />
-    <button commandfor="connection-dialog" command="show-modal">Setup</button>
-    <br />
-    <canvas id="debug" width="360" height="640"></canvas>
 
     <dialog class="connection-form" id="connection-dialog">
       <div class="connections-dialog-body">

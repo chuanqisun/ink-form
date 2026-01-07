@@ -1,5 +1,6 @@
 import { concatMap, EMPTY, from, fromEvent, map, mergeMap, take } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
+import { CanvasStack } from "./components/canvas-stack";
 import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
@@ -11,6 +12,7 @@ export async function main() {
   const drawCanvas = new DrawingCanvas("DrawCanvas");
   const generativeCanvas = new GenerativeCanvas("GenerativeCanvas");
   const debugCanvas = new CharacterCanvas("debug");
+  new CanvasStack("canvas-stack");
 
   const program$ = fromEvent(drawCanvas, "drawingstop").pipe(
     mergeMap(() => {

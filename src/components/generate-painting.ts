@@ -26,7 +26,7 @@ export async function generatePainting(aiConnection: AIConnection, description: 
           },
         ],
       },
-      { role: "user", parts: [{ text: `Paint the concept based on the follow character and its meaning:\n${description}` }] },
+      { role: "user", parts: [{ text: `Paint the concept inspired by ${description}` }] },
     ],
   });
 

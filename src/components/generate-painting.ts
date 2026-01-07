@@ -67,7 +67,7 @@ export async function editPainting(aiConnection: AIConnection, imageData: string
       role: "model",
       parts: [
         {
-          text: "Paint over the red rectangle area with a concept described by the user. Do NOT include calligraphy, text, inscription, or seal. Convert the user provided concept into painting with a style consistent with the rest of the painting.",
+          text: "Paint over the red rectangle area. Replace the red rectangle area with a concept described by the user. Do NOT include calligraphy, text, inscription, or seal. Convert the user provided concept into painting with a style consistent with the rest of the painting.",
         },
       ],
     },

@@ -10,6 +10,7 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
   const ai = new GoogleGenAI({ apiKey });
   const config: GenerateContentConfig = {
     responseModalities: ["TEXT"],
+    temperature: 0,
   };
   const model = "gemini-2.5-flash-image";
 

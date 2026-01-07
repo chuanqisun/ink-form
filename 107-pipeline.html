@@ -18,9 +18,6 @@
 
       .canvas-stack {
         position: relative;
-        margin: auto;
-        /* width: 360px;
-        height: 640px; */
 
         canvas {
           border: 4px double black;
@@ -32,10 +29,12 @@
         }
 
         &:not(.debug) {
+          display: grid;
+          place-content: center;
+
           canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
           }
 
           #debug {

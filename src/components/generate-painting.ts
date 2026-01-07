@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, type GenerateContentConfig } from "@google/genai";
 import { AIConnection } from "./ai-connection";
 
 export async function generatePainting(aiConnection: AIConnection, description: string): Promise<string[]> {
@@ -8,10 +8,11 @@ export async function generatePainting(aiConnection: AIConnection, description: 
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const config = {
+  const config: GenerateContentConfig = {
     responseModalities: ["IMAGE"],
+    temperature: 0.5,
   };
-  const model = "gemini-2.5-flash-image-preview";
+  const model = "gemini-2.5-flash-image";
 
   const response = await ai.models.generateContent({
     model,
@@ -21,7 +22,7 @@ export async function generatePainting(aiConnection: AIConnection, description: 
         role: "model",
         parts: [
           {
-            text: "Create a minimalist traditional Chinese painting based on description. Do NOT include calligraphy, text, seal. Convert the user provided concept into graphical representation",
+            text: "Create a minimalist traditional Chinese painting based on description. Do NOT include calligraphy, text, inscription, seal. Convert the user provided concept into graphical representation",
           },
         ],
       },
@@ -42,10 +43,11 @@ export async function editPainting(aiConnection: AIConnection, imageData: string
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const config = {
+  const config: GenerateContentConfig = {
     responseModalities: ["IMAGE"],
+    temperature: 0.5,
   };
-  const model = "gemini-2.5-flash-image-preview";
+  const model = "gemini-2.5-flash-image";
 
   // Parse the image data (assuming it's a data URL like data:image/jpeg;base64,...)
   let data: string;
@@ -65,7 +67,7 @@ export async function editPainting(aiConnection: AIConnection, imageData: string
       role: "model",
       parts: [
         {
-          text: "Paint the red rectangle area with a concept described by the user. Do NOT include calligraphy, text, or seal. Convert the user provided concept into painting with a style is consistent with the rest of the painting.",
+          text: "Paint over the red rectangle area with a concept described by the user. Do NOT include calligraphy, text, inscription, or seal. Convert the user provided concept into painting with a style consistent with the rest of the painting.",
         },
       ],
     },

@@ -5,23 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dual Canvas Drawing</title>
     <style>
+      :root {
+        color-scheme: dark;
+      }
+
       * {
         margin: 0;
         box-sizing: border-box;
       }
 
       body {
-        background-color: rgb(245, 237, 220);
+        background-color: black;
         overflow: hidden;
         padding: 20px;
+
+        &:has(.canvas-stack.debug) {
+          background-color: white;
+        }
       }
 
       .canvas-stack {
         position: relative;
 
         canvas {
+          height: calc(100vh - 40px);
+          width: auto;
           border: 4px double black;
           touch-action: none;
+        }
+
+        #GenerativeCanvas {
+          background-color: rgb(245, 237, 220);
         }
 
         canvas:not(#DrawCanvas) {
@@ -43,9 +57,17 @@
         }
 
         &.debug {
+          canvas {
+            width: 240px;
+            height: auto;
+          }
+
           display: grid;
-          grid-template: "draw outline render" auto / 360px 360px 360px;
+          grid-template:
+            "draw outline render" 1fr
+            / auto auto auto;
           gap: 16px;
+          justify-content: center;
 
           #debug {
             grid-area: outline;
@@ -69,6 +91,10 @@
         position: fixed;
         top: 0;
         left: 0;
+
+        &:not(:hover, :focus) {
+          opacity: 0;
+        }
       }
     </style>
   </head>

@@ -66,15 +66,25 @@ export class DrawingCanvas extends EventTarget {
     this.dispatched = false;
     this.resetTimer();
     const rect = this.canvas.getBoundingClientRect();
+    const style = window.getComputedStyle(this.canvas);
+    const borderLeft = parseFloat(style.borderLeftWidth);
+    const borderTop = parseFloat(style.borderTopWidth);
+    const scaleX = this.canvas.width / (rect.width - borderLeft - parseFloat(style.borderRightWidth));
+    const scaleY = this.canvas.height / (rect.height - borderTop - parseFloat(style.borderBottomWidth));
     this.ctx.beginPath();
-    this.ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    this.ctx.moveTo((e.clientX - rect.left - borderLeft) * scaleX, (e.clientY - rect.top - borderTop) * scaleY);
   }
 
   private draw(e: PointerEvent): void {
     if (!this.isDrawing) return;
     this.resetTimer();
     const rect = this.canvas.getBoundingClientRect();
-    this.ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    const style = window.getComputedStyle(this.canvas);
+    const borderLeft = parseFloat(style.borderLeftWidth);
+    const borderTop = parseFloat(style.borderTopWidth);
+    const scaleX = this.canvas.width / (rect.width - borderLeft - parseFloat(style.borderRightWidth));
+    const scaleY = this.canvas.height / (rect.height - borderTop - parseFloat(style.borderBottomWidth));
+    this.ctx.lineTo((e.clientX - rect.left - borderLeft) * scaleX, (e.clientY - rect.top - borderTop) * scaleY);
     this.ctx.stroke();
   }
 

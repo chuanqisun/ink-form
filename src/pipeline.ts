@@ -27,12 +27,11 @@ import { startIdeaGeneration } from "./components/idea-generator";
 import { identifyCharacter, identifyCharacterFast } from "./components/identify-character";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
-import "./pipeline.css";
 
 export async function main() {
   const connection = new AIConnection();
   const drawCanvas = new DrawingCanvas("DrawCanvas");
-  const generativeCanvas = new GenerativeCanvas("GenerativeCanvas");
+  const generativeCanvas = new GenerativeCanvas("GenerativeCanvas", "OverlayCanvas");
   new CharacterCanvas("debug");
   const soundscape = new Soundscape();
   new CanvasStack("canvas-stack");
@@ -111,6 +110,7 @@ export async function main() {
           }),
           finalize(() => {
             result.charCanvas.destroy();
+            generativeCanvas.clearOverlay();
           })
         );
 

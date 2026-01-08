@@ -51,7 +51,8 @@
             grid-row: 1 / -1;
           }
 
-          #debug {
+          #debug,
+          .overlay-canvas {
             display: none;
           }
         }
@@ -81,7 +82,8 @@
             grid-area: render;
           }
 
-          .character-canvas {
+          .character-canvas,
+          .overlay-canvas {
             grid-area: outline;
           }
         }
@@ -107,6 +109,7 @@
     </header>
 
     <div id="canvas-stack" class="canvas-stack">
+      <canvas id="OverlayCanvas" width="720" height="1280" class="overlay-canvas"></canvas>
       <canvas id="debug" width="720" height="1280"></canvas>
       <canvas id="GenerativeCanvas" width="720" height="1280"></canvas>
       <canvas id="DrawCanvas" width="720" height="1280"></canvas>

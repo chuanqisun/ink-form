@@ -1,12 +1,19 @@
 export class GenerativeCanvas extends EventTarget {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private overlayCanvas: HTMLCanvasElement | null = null;
+  private overlayCtx: CanvasRenderingContext2D | null = null;
 
-  constructor(canvasId: string) {
+  constructor(canvasId: string, overlayCanvasId: string) {
     super();
 
     this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true })!;
+
+    this.overlayCanvas = document.getElementById(overlayCanvasId) as HTMLCanvasElement;
+    if (this.overlayCanvas) {
+      this.overlayCtx = this.overlayCanvas.getContext("2d")!;
+    }
   }
 
   get element(): HTMLCanvasElement {
@@ -29,23 +36,32 @@ export class GenerativeCanvas extends EventTarget {
   }
 
   getOverlayImage(boundingBox: { x: number; y: number; width: number; height: number }) {
-    // Create a new canvas to compose the overlay
-    const overlayCanvas = document.createElement("canvas");
-    overlayCanvas.width = this.canvas.width;
-    overlayCanvas.height = this.canvas.height;
-    const overlayCtx = overlayCanvas.getContext("2d")!;
+    if (!this.overlayCanvas || !this.overlayCtx) {
+      throw new Error("Overlay canvas not initialized");
+    }
+
+    // Clear and match dimensions
+    this.overlayCanvas.width = this.canvas.width;
+    this.overlayCanvas.height = this.canvas.height;
+    this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
     // Draw the current canvas content
-    overlayCtx.drawImage(this.canvas, 0, 0);
+    this.overlayCtx.drawImage(this.canvas, 0, 0);
 
     // Draw the red rectangle overlay
-    overlayCtx.strokeStyle = "red";
-    overlayCtx.lineWidth = 2;
-    overlayCtx.fillStyle = "transparent";
-    overlayCtx.strokeRect(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height);
+    this.overlayCtx.strokeStyle = "red";
+    this.overlayCtx.lineWidth = 2;
+    this.overlayCtx.fillStyle = "transparent";
+    this.overlayCtx.strokeRect(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height);
 
     // Return the data URL of the composed image
-    return overlayCanvas.toDataURL();
+    return this.overlayCanvas.toDataURL();
+  }
+
+  clearOverlay(): void {
+    if (this.overlayCtx) {
+      this.overlayCtx.clearRect(0, 0, this.overlayCanvas!.width, this.overlayCanvas!.height);
+    }
   }
 
   writeImage(data: ImageData): void {

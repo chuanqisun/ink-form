@@ -22,16 +22,15 @@ export async function main() {
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
 
-  let musicEnabled = false;
   const musicToggle = document.getElementById("music-toggle") as HTMLButtonElement;
   musicToggle.addEventListener("click", () => {
-    musicEnabled = !musicEnabled;
-    musicToggle.textContent = `Music: ${musicEnabled ? "On" : "Off"}`;
-    if (musicEnabled) {
-      soundscape.startBackground().catch((err) => console.error("Failed to start music:", err));
-    } else {
+    const nextIndex = soundscape.currentTrackIndex + 1;
+    if (nextIndex >= soundscape.totalTracks) {
       soundscape.stopBackground();
+    } else {
+      soundscape.startBackground(nextIndex).catch((err) => console.error("Failed to start music:", err));
     }
+    musicToggle.textContent = soundscape.currentTrackIndex === -1 ? "Music: Off" : `Music: ${soundscape.currentTrackIndex + 1}`;
   });
 
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();

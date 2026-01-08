@@ -97,13 +97,27 @@ export class Soundscape {
   public readonly audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   private activeVoices = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>();
   private backgroundVoice: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
-  private readonly BACKGROUND_VOLUME = 0.5;
+  private readonly BACKGROUND_VOLUME = 0.75;
+  private readonly BACKGROUND_LOW_VOLUME = 0.1;
 
-  async startBackground() {
+  private _currentTrackIndex: number = -1;
+  private readonly _totalTracks = 3;
+
+  get currentTrackIndex() {
+    return this._currentTrackIndex;
+  }
+
+  get totalTracks() {
+    return this._totalTracks;
+  }
+
+  async startBackground(index: number = 0) {
     this.stopBackground();
+    this._currentTrackIndex = index % this._totalTracks;
+
     const modules = [await import("../assets/track-01.mp3"), await import("../assets/track-02.mp3"), await import("../assets/track-03.mp3")];
     const availableTracks = modules.map((m) => m.default);
-    const trackUrl = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+    const trackUrl = availableTracks[this._currentTrackIndex];
 
     const response = await fetch(trackUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -118,8 +132,8 @@ export class Soundscape {
     source.loop = true;
 
     const gain = this.audioContext.createGain();
-    // Start at 0 if sounds are already playing, else normal volume
-    gain.gain.value = this.activeVoices.size > 0 ? 0 : this.BACKGROUND_VOLUME;
+    // Start at low volume if sounds are already playing, else normal volume
+    gain.gain.value = this.activeVoices.size > 0 ? this.BACKGROUND_LOW_VOLUME : this.BACKGROUND_VOLUME;
     source.connect(gain);
     gain.connect(this.audioContext.destination);
 
@@ -128,6 +142,7 @@ export class Soundscape {
   }
 
   stopBackground() {
+    this._currentTrackIndex = -1;
     if (this.backgroundVoice) {
       try {
         this.backgroundVoice.source.stop();
@@ -163,7 +178,7 @@ export class Soundscape {
       }
 
       if (this.activeVoices.size === 0) {
-        this.fadeBackground(0, 0.5);
+        this.fadeBackground(this.BACKGROUND_LOW_VOLUME, 0.5);
       }
 
       const source = this.audioContext.createBufferSource();

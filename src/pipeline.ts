@@ -5,8 +5,8 @@ import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
-import { identifyCharacter } from "./components/identify-character";
 import { startIdeaGeneration } from "./components/idea-generator";
+import { identifyCharacter } from "./components/identify-character";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
 

@@ -43,7 +43,6 @@ Represent each object with a *single* Chinese character and Single word/phrase E
 
         const parser = new JSONParser();
         parser.onValue = ({ value, key, stack }) => {
-          console.log("Parser stack:", stack, "key:", key, "value:", value);
           if (typeof key === "number" && value && typeof value === "object") {
             const item = value as { character: string; meaning: string };
             if (item.character && item.meaning) {

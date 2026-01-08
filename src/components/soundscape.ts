@@ -1,5 +1,5 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
-import { EMPTY, Observable } from "rxjs";
+import { EMPTY, Observable, Subject, switchMap } from "rxjs";
 import { AIConnection } from "./ai-connection";
 
 /**
@@ -97,8 +97,68 @@ export class Soundscape {
   public readonly audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   private activeVoices = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>();
   private backgroundVoice: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private backgroundRequest$ = new Subject<number>();
   private readonly BACKGROUND_VOLUME = 0.75;
   private readonly BACKGROUND_LOW_VOLUME = 0.1;
+
+  constructor() {
+    this.backgroundRequest$.pipe(
+      switchMap(index => {
+        this.stopBackgroundInternal();
+        if (index === -1) {
+          return EMPTY;
+        }
+
+        return new Observable<{ buffer: AudioBuffer; index: number }>((subscriber) => {
+          let aborted = false;
+          const controller = new AbortController();
+
+          const load = async () => {
+            try {
+              const trackIndex = index % this._totalTracks;
+              const modules = [
+                await import("../assets/track-01.mp3"),
+                await import("../assets/track-02.mp3"),
+                await import("../assets/track-03.mp3"),
+              ];
+              if (aborted) return;
+
+              const availableTracks = modules.map((m) => m.default);
+              const trackUrl = availableTracks[trackIndex];
+
+              const response = await fetch(trackUrl, { signal: controller.signal });
+              const arrayBuffer = await response.arrayBuffer();
+              if (aborted) return;
+
+              const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+              if (aborted) return;
+
+              subscriber.next({ buffer: audioBuffer, index: trackIndex });
+              subscriber.complete();
+            } catch (err: any) {
+              if (err.name !== "AbortError" && !aborted) {
+                subscriber.error(err);
+              }
+            }
+          };
+
+          load();
+
+          return () => {
+            aborted = true;
+            controller.abort();
+          };
+        });
+      })
+    ).subscribe({
+      next: ({ buffer }) => {
+        this.startBackgroundInternal(buffer);
+      },
+      error: (err) => {
+        console.error("Failed to load background music:", err);
+      }
+    });
+  }
 
   private _currentTrackIndex: number = -1;
   private readonly _totalTracks = 3;
@@ -112,17 +172,29 @@ export class Soundscape {
   }
 
   async startBackground(index: number = 0) {
-    this.stopBackground();
     this._currentTrackIndex = index % this._totalTracks;
+    this.backgroundRequest$.next(this._currentTrackIndex);
+  }
 
-    const modules = [await import("../assets/track-01.mp3"), await import("../assets/track-02.mp3"), await import("../assets/track-03.mp3")];
-    const availableTracks = modules.map((m) => m.default);
-    const trackUrl = availableTracks[this._currentTrackIndex];
+  stopBackground() {
+    this._currentTrackIndex = -1;
+    this.backgroundRequest$.next(-1);
+  }
 
-    const response = await fetch(trackUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+  private stopBackgroundInternal() {
+    if (this.backgroundVoice) {
+      try {
+        this.backgroundVoice.source.stop();
+        this.backgroundVoice.source.disconnect();
+        this.backgroundVoice.gain.disconnect();
+      } catch (e) {
+        // Already stopped
+      }
+      this.backgroundVoice = null;
+    }
+  }
 
+  private async startBackgroundInternal(audioBuffer: AudioBuffer) {
     if (this.audioContext.state === "suspended") {
       await this.audioContext.resume();
     }
@@ -139,20 +211,6 @@ export class Soundscape {
 
     source.start();
     this.backgroundVoice = { source, gain };
-  }
-
-  stopBackground() {
-    this._currentTrackIndex = -1;
-    if (this.backgroundVoice) {
-      try {
-        this.backgroundVoice.source.stop();
-        this.backgroundVoice.source.disconnect();
-        this.backgroundVoice.gain.disconnect();
-      } catch (e) {
-        // Already stopped
-      }
-      this.backgroundVoice = null;
-    }
   }
 
   private fadeBackground(targetVolume: number, duration: number) {

@@ -22,7 +22,7 @@ export async function generatePainting(aiConnection: AIConnection, description: 
         role: "model",
         parts: [
           {
-            text: "Create a minimalist traditional Chinese painting based on description. Do NOT include calligraphy, text, inscription, seal. Convert the user provided concept into graphical representation",
+            text: "Create a minimalist traditional Chinese painting based on description. Borderless and Frameless. Do NOT include calligraphy, text, inscription, seal. Convert the user provided concept into graphical representation",
           },
         ],
       },

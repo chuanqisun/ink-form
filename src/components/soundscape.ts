@@ -101,15 +101,15 @@ export class Soundscape {
   private readonly BACKGROUND_VOLUME = 0.75;
   private readonly BACKGROUND_LOW_VOLUME = 0.1;
 
-  private _vfxEnabled = true;
+  private _sfxEnabled = false;
 
-  get vfxEnabled() {
-    return this._vfxEnabled;
+  get sfxEnabled() {
+    return this._sfxEnabled;
   }
 
-  toggleVfx() {
-    this._vfxEnabled = !this._vfxEnabled;
-    return this._vfxEnabled;
+  toggleSfx() {
+    this._sfxEnabled = !this._sfxEnabled;
+    return this._sfxEnabled;
   }
 
   constructor() {

@@ -50,10 +50,10 @@ export async function main() {
     musicToggle.textContent = soundscape.currentTrackIndex === -1 ? "Music: Off" : `Music: ${soundscape.currentTrackIndex + 1}`;
   });
 
-  const vfxToggle = document.getElementById("vfx-toggle") as HTMLButtonElement;
-  vfxToggle.addEventListener("click", () => {
-    const enabled = soundscape.toggleVfx();
-    vfxToggle.textContent = enabled ? "VFX: On" : "VFX: Off";
+  const sfxToggle = document.getElementById("sfx-toggle") as HTMLButtonElement;
+  sfxToggle.addEventListener("click", () => {
+    const enabled = soundscape.toggleSfx();
+    sfxToggle.textContent = enabled ? "SFX: On" : "SFX: Off";
   });
 
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
@@ -114,7 +114,7 @@ export async function main() {
           })
         );
 
-        const sound$ = soundscape.vfxEnabled
+        const sound$ = soundscape.sfxEnabled
           ? designSound({ connection, concept: result.identifiedMeaning }).pipe(
               mergeMap((description) => {
                 console.log("Sound design description:", description);

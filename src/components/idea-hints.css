@@ -1,0 +1,41 @@
+.idea-hints-container {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.idea-card {
+  box-sizing: border-box;
+  background: rgba(40, 40, 40, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  color: #efece5; /* Traditional paper color hint */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.idea-character {
+  font-size: 24px;
+  font-family: "Noto Serif SC", serif;
+  margin-bottom: 2px;
+}
+
+.idea-meaning {
+  font-size: 14px;
+  opacity: 0.9;
+  text-align: center;
+  font-family: sans-serif;
+  text-transform: capitalize;
+}

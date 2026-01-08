@@ -29,8 +29,12 @@ export function startIdeaGeneration(recognizedConcepts: Observable<string>): Obs
     scan((acc, curr) => [...acc, curr], [] as string[]),
     switchMap((concepts) => {
       return new Observable<{ character: string; meaning: string }>((subscriber) => {
-        const prompt = `Based on related concepts from a painting session: ${concepts.join(", ")}.
-Suggest 5-7 new objects that would be relevant to Chinese traditional culture and painting.
+        const prompt = `Based on related concepts from a painting session:
+"""
+${concepts.join("\n")}
+"""
+
+Suggest 7 new objects that would be relevant to Chinese traditional culture and painting.
 Represent each object with a *single* Chinese character and Single word/phrase English definition. Respond in this JSON format:
 [
   {

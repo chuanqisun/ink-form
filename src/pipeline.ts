@@ -1,5 +1,4 @@
 import { catchError, concatMap, defaultIfEmpty, EMPTY, finalize, from, fromEvent, map, mergeMap, of, Subject, take, tap, zip } from "rxjs";
-import "./pipeline.css";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
 import { CharacterCanvas } from "./components/character-canvas";
@@ -11,6 +10,7 @@ import { IdeaHints } from "./components/idea-hints";
 import { identifyCharacter } from "./components/identify-character";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
+import "./pipeline.css";
 
 export async function main() {
   const connection = new AIConnection();
@@ -23,11 +23,8 @@ export async function main() {
 
   const recognizedConcepts$ = new Subject<string>();
 
-  const ideas$ = startIdeaGeneration(recognizedConcepts$);
-
-  ideas$.subscribe((idea) => {
-    ideaHints.addIdea(idea);
-  });
+  const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.addIdea(idea)));
+  ideasHinting$.subscribe();
 
   const program$ = fromEvent(drawCanvas, "drawingstop")
     .pipe(

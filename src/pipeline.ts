@@ -1,4 +1,4 @@
-import { catchError, concatMap, EMPTY, finalize, from, fromEvent, map, merge, mergeMap, take } from "rxjs";
+import { catchError, concatMap, EMPTY, finalize, from, fromEvent, map, mergeMap, take, zip } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
 import { CharacterCanvas } from "./components/character-canvas";
@@ -39,18 +39,6 @@ export async function main() {
       concatMap((result) => {
         console.log("Character", result.character);
 
-        const audio$ = designSound({ connection, concept: result.character }).pipe(
-          mergeMap((description) => {
-            console.log("Sound design description:", description);
-            return generateSoundEffect(connection, description, soundscape.audioContext);
-          }),
-          mergeMap((buffer) => soundscape.play(buffer, { loopCount: 0, stopOthers: true })),
-          catchError((err) => {
-            console.error("Audio playback error:", err);
-            return EMPTY;
-          })
-        );
-
         const isEmpty = generativeCanvas.isCanvasEmpty();
         const overlayImage = isEmpty ? null : generativeCanvas.getOverlayImage(result.box);
         console.log("Overlay Image:", { overlayImage, result });
@@ -64,7 +52,20 @@ export async function main() {
           })
         );
 
-        return merge(audio$, visual$);
+        const sound$ = designSound({ connection, concept: result.character }).pipe(
+          mergeMap((description) => {
+            console.log("Sound design description:", description);
+            return generateSoundEffect(connection, description, soundscape.audioContext);
+          })
+        );
+
+        return zip(visual$, sound$).pipe(
+          mergeMap(([_, buffer]) => soundscape.play(buffer, { loopCount: 0, stopOthers: true })),
+          catchError((err) => {
+            console.error("Audio playback error:", err);
+            return EMPTY;
+          })
+        );
       })
     )
     .pipe(

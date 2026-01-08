@@ -1,0 +1,58 @@
+.idea-hints-container {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.idea-card {
+  background: rgba(40, 40, 40, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  color: #efece5; /* Traditional paper color hint */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  animation: idea-fade-in 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.idea-card.fade-out {
+  opacity: 0;
+  transform: translateX(30px) scale(0.9);
+}
+
+.idea-character {
+  font-size: 24px;
+  font-family: "Noto Serif SC", serif;
+  margin-bottom: 2px;
+}
+
+.idea-meaning {
+  font-size: 14px;
+  opacity: 0.9;
+  text-align: center;
+  font-family: sans-serif;
+  text-transform: capitalize;
+}
+
+@keyframes idea-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}

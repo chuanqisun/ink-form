@@ -1,4 +1,21 @@
-import { catchError, concatMap, defaultIfEmpty, EMPTY, finalize, from, fromEvent, map, mergeMap, of, Subject, take, tap, zip } from "rxjs";
+import {
+  catchError,
+  concatMap,
+  defaultIfEmpty,
+  EMPTY,
+  finalize,
+  from,
+  fromEvent,
+  ignoreElements,
+  map,
+  merge,
+  mergeMap,
+  of,
+  Subject,
+  take,
+  tap,
+  zip,
+} from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
 import { CardQueue } from "./components/card-queue";
@@ -7,7 +24,7 @@ import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
 import { startIdeaGeneration } from "./components/idea-generator";
-import { identifyCharacter } from "./components/identify-character";
+import { identifyCharacter, identifyCharacterFast } from "./components/identify-character";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
 import "./pipeline.css";
@@ -61,12 +78,19 @@ export async function main() {
         else stack.appendChild(charCanvasElement);
         const charCanvas = new CharacterCanvas(charCanvasElement.id);
         charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
-        return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ identified: char, box: boundingBox, charCanvas })));
-      }),
-      tap((result) => {
-        console.log("Character", result.identified.character, "Meaning", result.identified.meaning);
-        recognizedConcepts$.next(result.identified);
-        history.add(result.identified);
+        const fast$ = from(identifyCharacterFast(connection, dataUrl)).pipe(
+          tap((result) => console.log("Fast OCR", result)),
+          map((meaning) => ({ identifiedMeaning: meaning, box: boundingBox, charCanvas }))
+        );
+        const slow$ = from(identifyCharacter(connection, dataUrl)).pipe(
+          tap((result) => {
+            console.log("Slow OCR", `${result.character} ${result.meaning}`);
+            recognizedConcepts$.next(result);
+            history.add(result);
+          }),
+          ignoreElements()
+        );
+        return merge(fast$, slow$);
       }),
       concatMap((result) => {
         const isEmpty = generativeCanvas.isCanvasEmpty();
@@ -74,7 +98,7 @@ export async function main() {
         console.log("Overlay Image:", { overlayImage, result });
 
         const visual$ = from(
-          overlayImage ? editPainting(connection, overlayImage, result.identified.meaning) : generatePainting(connection, result.identified.meaning)
+          overlayImage ? editPainting(connection, overlayImage, result.identifiedMeaning) : generatePainting(connection, result.identifiedMeaning)
         ).pipe(
           concatMap((imageUrls) => from(imageUrls)),
           take(1),
@@ -91,7 +115,7 @@ export async function main() {
         );
 
         const sound$ = soundscape.vfxEnabled
-          ? designSound({ connection, concept: result.identified.meaning }).pipe(
+          ? designSound({ connection, concept: result.identifiedMeaning }).pipe(
               mergeMap((description) => {
                 console.log("Sound design description:", description);
                 return generateSoundEffect(connection, description, soundscape.audioContext);

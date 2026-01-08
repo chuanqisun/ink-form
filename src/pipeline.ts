@@ -43,17 +43,17 @@ export async function main() {
         else stack.appendChild(charCanvasElement);
         const charCanvas = new CharacterCanvas(charCanvasElement.id);
         charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
-        return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ character: char, box: boundingBox, charCanvas })));
+        return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ identified: char, box: boundingBox, charCanvas })));
       }),
-      tap((result) => recognizedConcepts$.next(result.character)),
+      tap((result) => recognizedConcepts$.next(result.identified.meaning)),
       concatMap((result) => {
-        console.log("Character", result.character);
+        console.log("Character", result.identified.character, "Meaning", result.identified.meaning);
 
         const isEmpty = generativeCanvas.isCanvasEmpty();
         const overlayImage = isEmpty ? null : generativeCanvas.getOverlayImage(result.box);
         console.log("Overlay Image:", { overlayImage, result });
 
-        const visual$ = from(overlayImage ? editPainting(connection, overlayImage, result.character) : generatePainting(connection, result.character)).pipe(
+        const visual$ = from(overlayImage ? editPainting(connection, overlayImage, result.identified.meaning) : generatePainting(connection, result.identified.meaning)).pipe(
           concatMap((imageUrls) => from(imageUrls)),
           take(1),
           concatMap(async (imageUrl) => {
@@ -62,7 +62,7 @@ export async function main() {
           })
         );
 
-        const sound$ = designSound({ connection, concept: result.character }).pipe(
+        const sound$ = designSound({ connection, concept: result.identified.meaning }).pipe(
           mergeMap((description) => {
             console.log("Sound design description:", description);
             return generateSoundEffect(connection, description, soundscape.audioContext);

@@ -1,7 +1,16 @@
 import { GoogleGenAI, type GenerateContentConfig } from "@google/genai";
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { AIConnection } from "./ai-connection";
 
-export async function identifyCharacter(aiConnection: AIConnection, imageData: string): Promise<string> {
+const characterSchema = z.object({
+  character: z.string().describe("The Chinese characters identified."),
+  meaning: z.string().describe("One word English definition."),
+});
+
+export type IdentifiedCharacter = z.infer<typeof characterSchema>;
+
+export async function identifyCharacter(aiConnection: AIConnection, imageData: string): Promise<IdentifiedCharacter> {
   const apiKey = aiConnection.getApiKey();
   if (!apiKey) {
     throw new Error("API key not found. Please connect to AI first.");
@@ -9,10 +18,11 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
 
   const ai = new GoogleGenAI({ apiKey });
   const config: GenerateContentConfig = {
-    responseModalities: ["TEXT"],
+    responseMimeType: "application/json",
+    responseJsonSchema: zodToJsonSchema(characterSchema as any),
     temperature: 0,
   };
-  const model = "gemini-2.5-flash-image";
+  const model = "gemini-3-flash-preview";
 
   // Parse the image data (assuming it's a data URL like data:image/jpeg;base64,...)
   let data: string;
@@ -38,30 +48,35 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
           },
         },
         {
-          text: `Identify the Chinese calligraphy character in this image. Respond only with the English meaning. In this format:
-"""
-Concept: <English Meaning>
-"""
-Do not include any other text.`,
+          text: `Identify the Chinese calligraphy character in this image. 
+Respond in this JSON format:
+{
+ "character": "<the identified Chinese character(s)>",
+ "meaning": "<One word English definition>"
+}
+`,
         },
       ],
     },
   ];
 
   console.time("identifyCharacter");
-  const response = await ai.models.generateContentStream({
+  const response = await ai.models.generateContent({
     model,
     config,
     contents,
   });
 
-  let result = "";
-  for await (const chunk of response) {
-    if (chunk.text) {
-      result += chunk.text;
-    }
+  const responseText = response.text;
+  console.log("Gemini Raw Response:", responseText);
+
+  if (!responseText) {
+    throw new Error("No text returned from Gemini");
   }
+
+  const json = JSON.parse(responseText);
+  const result = characterSchema.parse(json);
   console.timeEnd("identifyCharacter");
 
-  return result.trim();
+  return result;
 }

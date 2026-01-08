@@ -38,7 +38,7 @@ const response = await ai.models.generateContent({
   contents: prompt,
   config: {
     responseMimeType: "application/json",
-    responseJsonSchema: zodToJsonSchema(recipeSchema),
+    responseJsonSchema: zodToJsonSchema(recipeSchema as any),
   },
 });
 
@@ -66,7 +66,7 @@ const stream = await ai.models.generateContentStream({
   contents: prompt,
   config: {
     responseMimeType: "application/json",
-    responseJsonSchema: zodToJsonSchema(feedbackSchema),
+    responseJsonSchema: zodToJsonSchema(feedbackSchema as any),
   },
 });
 

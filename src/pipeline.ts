@@ -1,13 +1,12 @@
 import { catchError, concatMap, defaultIfEmpty, EMPTY, finalize, from, fromEvent, map, mergeMap, of, Subject, take, tap, zip } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
+import { CardQueue } from "./components/card-queue";
 import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
-import { History } from "./components/history";
 import { startIdeaGeneration } from "./components/idea-generator";
-import { IdeaHints } from "./components/idea-hints";
 import { identifyCharacter } from "./components/identify-character";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
@@ -20,12 +19,12 @@ export async function main() {
   new CharacterCanvas("debug");
   const soundscape = new Soundscape();
   new CanvasStack("canvas-stack");
-  const ideaHints = new IdeaHints();
-  const history = new History();
+  const ideaHints = new CardQueue("right", 7);
+  const history = new CardQueue("left", 7);
 
   const recognizedConcepts$ = new Subject<string>();
 
-  const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.addIdea(idea)));
+  const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));
   ideasHinting$.subscribe();
 
   const program$ = fromEvent(drawCanvas, "drawingstop")
@@ -49,7 +48,7 @@ export async function main() {
       }),
       tap((result) => {
         recognizedConcepts$.next(result.identified.meaning);
-        history.addCharacter(result.identified);
+        history.add(result.identified);
       }),
       concatMap((result) => {
         console.log("Character", result.identified.character, "Meaning", result.identified.meaning);

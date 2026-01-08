@@ -22,7 +22,7 @@ export async function main() {
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
 
-  const recognizedConcepts$ = new Subject<string>();
+  const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 
   const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));
   ideasHinting$.subscribe();
@@ -47,7 +47,7 @@ export async function main() {
         return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ identified: char, box: boundingBox, charCanvas })));
       }),
       tap((result) => {
-        recognizedConcepts$.next(result.identified.meaning);
+        recognizedConcepts$.next(result.identified);
         history.add(result.identified);
       }),
       concatMap((result) => {

@@ -21,17 +21,19 @@ const conceptSchema = z.object({
  * The suggestioned concepts must be relevant to Chinese traditional culture and painting
  * Each concept is a single Chinese character
  */
-export function startIdeaGeneration(recognizedConcepts: Observable<string>): Observable<{ character: string; meaning: string }> {
+export function startIdeaGeneration(
+  recognizedConcepts: Observable<{ character: string; meaning: string }>
+): Observable<{ character: string; meaning: string }> {
   const apiKey = localStorage.getItem("google_ai_api_key") || "";
   const ai = new GoogleGenAI({ apiKey });
 
   return recognizedConcepts.pipe(
-    scan((acc, curr) => [...acc, curr], [] as string[]),
+    scan((acc, curr) => [...acc, curr], [] as { character: string; meaning: string }[]),
     switchMap((concepts) => {
       return new Observable<{ character: string; meaning: string }>((subscriber) => {
         const prompt = `Based on related concepts from a painting session:
 """
-${concepts.join("\n")}
+${concepts.map((c) => `${c.character} (${c.meaning})`).join("\n")}
 """
 
 Suggest 7 new objects that would be relevant to Chinese traditional culture and painting.
@@ -46,7 +48,7 @@ Represent each object with a *single* Chinese character and Single word/phrase E
 `;
 
         const parser = new JSONParser();
-        parser.onValue = ({ value, key, stack }) => {
+        parser.onValue = ({ value, key }) => {
           if (typeof key === "number" && value && typeof value === "object") {
             const item = value as { character: string; meaning: string };
             if (item.character && item.meaning) {

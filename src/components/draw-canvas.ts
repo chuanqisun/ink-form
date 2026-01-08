@@ -13,9 +13,9 @@ export class DrawingCanvas extends EventTarget {
   private lastV: number = 0;
 
   private readonly MAX_W = 14;
-  private readonly MIN_W = 2;
-  private readonly SPEED_LIMIT = 40;
-  private readonly LERP_SPEED = 0.15;
+  private readonly MIN_W = 1.0;
+  private readonly SPEED_LIMIT = 35;
+  private readonly LERP_SPEED = 0.4;
 
   constructor(canvasId: string) {
     super();
@@ -154,15 +154,19 @@ export class DrawingCanvas extends EventTarget {
 
     // 3. The "Flick" (Sharp Ending)
     // If moving fast when released, continue the line while tapering to zero
-    if (this.lastV > 6) {
+    if (this.lastV > 5) {
       let flickX = this.lastX;
       let flickY = this.lastY;
       let flickW = this.lastW;
 
-      for (let i = 0; i < 10; i++) {
-        const nextX = flickX + this.lastDX * 0.15;
-        const nextY = flickY + this.lastDY * 0.15;
-        const nextW = flickW * 0.75;
+      const vx = this.lastDX / this.lastV;
+      const vy = this.lastDY / this.lastV;
+      let speed = this.lastV * 0.2;
+
+      for (let i = 0; i < 15; i++) {
+        const nextX = flickX + vx * speed;
+        const nextY = flickY + vy * speed;
+        const nextW = flickW * 0.8;
 
         this.ctx.beginPath();
         this.ctx.lineWidth = nextW;
@@ -173,7 +177,8 @@ export class DrawingCanvas extends EventTarget {
         flickX = nextX;
         flickY = nextY;
         flickW = nextW;
-        if (flickW < 0.5) break;
+        speed *= 0.8;
+        if (flickW < 0.2) break;
       }
     }
 

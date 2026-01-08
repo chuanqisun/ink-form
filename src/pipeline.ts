@@ -1,4 +1,4 @@
-import { catchError, concatMap, defaultIfEmpty, EMPTY, finalize, from, fromEvent, map, mergeMap, of, take, zip } from "rxjs";
+import { catchError, concatMap, defaultIfEmpty, EMPTY, finalize, from, fromEvent, map, mergeMap, of, Subject, take, tap, zip } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
 import { CharacterCanvas } from "./components/character-canvas";
@@ -6,6 +6,7 @@ import { DrawingCanvas } from "./components/draw-canvas";
 import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
 import { identifyCharacter } from "./components/identify-character";
+import { startIdeaGeneration } from "./components/idea-generator";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
 
@@ -16,6 +17,12 @@ export async function main() {
   new CharacterCanvas("debug");
   const soundscape = new Soundscape();
   new CanvasStack("canvas-stack");
+
+  const recognizedConcepts$ = new Subject<string>();
+
+  startIdeaGeneration(recognizedConcepts$).subscribe((idea) => {
+    console.log("New Idea:", idea);
+  });
 
   const program$ = fromEvent(drawCanvas, "drawingstop")
     .pipe(
@@ -36,6 +43,7 @@ export async function main() {
         charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
         return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ character: char, box: boundingBox, charCanvas })));
       }),
+      tap((result) => recognizedConcepts$.next(result.character)),
       concatMap((result) => {
         console.log("Character", result.character);
 

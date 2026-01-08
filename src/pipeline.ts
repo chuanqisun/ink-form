@@ -64,6 +64,12 @@ export async function main() {
           take(1),
           concatMap(async (imageUrl) => {
             await generativeCanvas.writeDataUrl(imageUrl);
+          }),
+          catchError((err) => {
+            console.error("Visual generation error:", err);
+            return of(null);
+          }),
+          finalize(() => {
             result.charCanvas.destroy();
           })
         );

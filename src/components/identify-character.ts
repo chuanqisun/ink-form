@@ -127,7 +127,7 @@ Respond in this format:
 Character: <Character or Kanji>
 Definition: <Short English definition, Sentence case>
 """
-Do not preamble or say anything else; just respond with the definition
+Do not preamble or say anything else; just respond with the character and definition
 `.trim(),
         },
       ],
@@ -146,5 +146,12 @@ Do not preamble or say anything else; just respond with the definition
   if (!responseText) {
     throw new Error("No text returned from Gemini");
   }
-  return responseText;
+
+  // Extract the definition from the response
+  const definitionMatch = responseText.match(/Definition:\s*(.*)/i);
+  if (definitionMatch) {
+    return definitionMatch[1].trim();
+  }
+
+  return responseText.trim();
 }

@@ -22,6 +22,18 @@ export async function main() {
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
 
+  let musicEnabled = false;
+  const musicToggle = document.getElementById("music-toggle") as HTMLButtonElement;
+  musicToggle.addEventListener("click", () => {
+    musicEnabled = !musicEnabled;
+    musicToggle.textContent = `Music: ${musicEnabled ? "On" : "Off"}`;
+    if (musicEnabled) {
+      soundscape.startBackground().catch((err) => console.error("Failed to start music:", err));
+    } else {
+      soundscape.stopBackground();
+    }
+  });
+
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 
   const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));

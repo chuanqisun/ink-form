@@ -96,6 +96,57 @@ export interface PlaybackOptions {
 export class Soundscape {
   public readonly audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   private activeVoices = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>();
+  private backgroundVoice: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private readonly BACKGROUND_VOLUME = 0.5;
+
+  async startBackground() {
+    this.stopBackground();
+    const modules = [await import("../assets/track-01.mp3"), await import("../assets/track-02.mp3"), await import("../assets/track-03.mp3")];
+    const availableTracks = modules.map((m) => m.default);
+    const trackUrl = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+
+    const response = await fetch(trackUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+    if (this.audioContext.state === "suspended") {
+      await this.audioContext.resume();
+    }
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.loop = true;
+
+    const gain = this.audioContext.createGain();
+    // Start at 0 if sounds are already playing, else normal volume
+    gain.gain.value = this.activeVoices.size > 0 ? 0 : this.BACKGROUND_VOLUME;
+    source.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    source.start();
+    this.backgroundVoice = { source, gain };
+  }
+
+  stopBackground() {
+    if (this.backgroundVoice) {
+      try {
+        this.backgroundVoice.source.stop();
+        this.backgroundVoice.source.disconnect();
+        this.backgroundVoice.gain.disconnect();
+      } catch (e) {
+        // Already stopped
+      }
+      this.backgroundVoice = null;
+    }
+  }
+
+  private fadeBackground(targetVolume: number, duration: number) {
+    if (!this.backgroundVoice) return;
+    const now = this.audioContext.currentTime;
+    this.backgroundVoice.gain.gain.cancelScheduledValues(now);
+    this.backgroundVoice.gain.gain.setValueAtTime(this.backgroundVoice.gain.gain.value, now);
+    this.backgroundVoice.gain.gain.linearRampToValueAtTime(targetVolume, now + duration);
+  }
 
   /**
    * Plays an AudioBuffer. Returns an Observable that completes when the sound finishes.
@@ -105,9 +156,14 @@ export class Soundscape {
     return new Observable<void>((subscriber) => {
       const { loopCount = 0, stopOthers = false } = options;
       const fadeTime = 0.5;
+      const startDelay = 0;
 
       if (stopOthers) {
         this.stopAll(fadeTime);
+      }
+
+      if (this.activeVoices.size === 0) {
+        this.fadeBackground(0, 0.5);
       }
 
       const source = this.audioContext.createBufferSource();
@@ -122,13 +178,17 @@ export class Soundscape {
       gain.connect(this.audioContext.destination);
 
       const now = this.audioContext.currentTime;
-      gain.gain.setValueAtTime(1, now);
+      const startTime = now + startDelay;
+
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(1, startTime + 0.5);
 
       if (loopCount !== -1 && source.buffer) {
         const duration = source.buffer.duration;
-        const fadeOutStart = Math.max(0, duration - fadeTime);
-        gain.gain.setValueAtTime(1, now + fadeOutStart);
-        gain.gain.linearRampToValueAtTime(0, now + duration);
+        const fadeOutStart = Math.max(0.5, duration - fadeTime);
+        gain.gain.setValueAtTime(1, startTime + fadeOutStart);
+        gain.gain.linearRampToValueAtTime(0, startTime + duration);
       }
 
       const voice = { source, gain };
@@ -137,6 +197,9 @@ export class Soundscape {
       source.onended = () => {
         if (this.activeVoices.has(voice)) {
           this.activeVoices.delete(voice);
+          if (this.activeVoices.size === 0) {
+            this.fadeBackground(this.BACKGROUND_VOLUME, 0.5);
+          }
           subscriber.next();
           subscriber.complete();
         }
@@ -146,7 +209,7 @@ export class Soundscape {
         this.audioContext.resume();
       }
 
-      source.start(now);
+      source.start(startTime);
 
       return () => {
         this.stopVoice(voice, fadeTime);
@@ -169,7 +232,12 @@ export class Soundscape {
 
     // Delay removal to allow fade out to complete
     setTimeout(() => {
-      this.activeVoices.delete(voice);
+      if (this.activeVoices.has(voice)) {
+        this.activeVoices.delete(voice);
+        if (this.activeVoices.size === 0) {
+          this.fadeBackground(this.BACKGROUND_VOLUME, 0.5);
+        }
+      }
     }, fadeTime * 1000 + 100);
   }
 

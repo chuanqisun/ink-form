@@ -33,11 +33,10 @@ export async function main() {
     musicToggle.textContent = soundscape.currentTrackIndex === -1 ? "Music: Off" : `Music: ${soundscape.currentTrackIndex + 1}`;
   });
 
-  let vfxEnabled = true;
   const vfxToggle = document.getElementById("vfx-toggle") as HTMLButtonElement;
   vfxToggle.addEventListener("click", () => {
-    vfxEnabled = !vfxEnabled;
-    vfxToggle.textContent = vfxEnabled ? "VFX: On" : "VFX: Off";
+    const enabled = soundscape.toggleVfx();
+    vfxToggle.textContent = enabled ? "VFX: On" : "VFX: Off";
   });
 
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
@@ -91,7 +90,7 @@ export async function main() {
           })
         );
 
-        const sound$ = vfxEnabled
+        const sound$ = soundscape.vfxEnabled
           ? designSound({ connection, concept: result.identified.meaning }).pipe(
               mergeMap((description) => {
                 console.log("Sound design description:", description);

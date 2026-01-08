@@ -101,63 +101,72 @@ export class Soundscape {
   private readonly BACKGROUND_VOLUME = 0.75;
   private readonly BACKGROUND_LOW_VOLUME = 0.1;
 
+  private _vfxEnabled = true;
+
+  get vfxEnabled() {
+    return this._vfxEnabled;
+  }
+
+  toggleVfx() {
+    this._vfxEnabled = !this._vfxEnabled;
+    return this._vfxEnabled;
+  }
+
   constructor() {
-    this.backgroundRequest$.pipe(
-      switchMap(index => {
-        this.stopBackgroundInternal();
-        if (index === -1) {
-          return EMPTY;
-        }
+    this.backgroundRequest$
+      .pipe(
+        switchMap((index) => {
+          this.stopBackgroundInternal();
+          if (index === -1) {
+            return EMPTY;
+          }
 
-        return new Observable<{ buffer: AudioBuffer; index: number }>((subscriber) => {
-          let aborted = false;
-          const controller = new AbortController();
+          return new Observable<{ buffer: AudioBuffer; index: number }>((subscriber) => {
+            let aborted = false;
+            const controller = new AbortController();
 
-          const load = async () => {
-            try {
-              const trackIndex = index % this._totalTracks;
-              const modules = [
-                await import("../assets/track-01.mp3"),
-                await import("../assets/track-02.mp3"),
-                await import("../assets/track-03.mp3"),
-              ];
-              if (aborted) return;
+            const load = async () => {
+              try {
+                const trackIndex = index % this._totalTracks;
+                const modules = [await import("../assets/track-01.mp3"), await import("../assets/track-02.mp3"), await import("../assets/track-03.mp3")];
+                if (aborted) return;
 
-              const availableTracks = modules.map((m) => m.default);
-              const trackUrl = availableTracks[trackIndex];
+                const availableTracks = modules.map((m) => m.default);
+                const trackUrl = availableTracks[trackIndex];
 
-              const response = await fetch(trackUrl, { signal: controller.signal });
-              const arrayBuffer = await response.arrayBuffer();
-              if (aborted) return;
+                const response = await fetch(trackUrl, { signal: controller.signal });
+                const arrayBuffer = await response.arrayBuffer();
+                if (aborted) return;
 
-              const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-              if (aborted) return;
+                const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                if (aborted) return;
 
-              subscriber.next({ buffer: audioBuffer, index: trackIndex });
-              subscriber.complete();
-            } catch (err: any) {
-              if (err.name !== "AbortError" && !aborted) {
-                subscriber.error(err);
+                subscriber.next({ buffer: audioBuffer, index: trackIndex });
+                subscriber.complete();
+              } catch (err: any) {
+                if (err.name !== "AbortError" && !aborted) {
+                  subscriber.error(err);
+                }
               }
-            }
-          };
+            };
 
-          load();
+            load();
 
-          return () => {
-            aborted = true;
-            controller.abort();
-          };
-        });
-      })
-    ).subscribe({
-      next: ({ buffer }) => {
-        this.startBackgroundInternal(buffer);
-      },
-      error: (err) => {
-        console.error("Failed to load background music:", err);
-      }
-    });
+            return () => {
+              aborted = true;
+              controller.abort();
+            };
+          });
+        })
+      )
+      .subscribe({
+        next: ({ buffer }) => {
+          this.startBackgroundInternal(buffer);
+        },
+        error: (err) => {
+          console.error("Failed to load background music:", err);
+        },
+      });
   }
 
   private _currentTrackIndex: number = -1;

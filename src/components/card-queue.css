@@ -1,15 +1,22 @@
-.idea-hints-container {
+.card-queue-container {
   position: fixed;
-  right: 20px;
   top: 50%;
   transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto;
   z-index: 1000;
   pointer-events: none;
 }
 
-.idea-card {
+.card-queue-container.left {
+  left: 20px;
+}
+
+.card-queue-container.right {
+  right: 20px;
+}
+
+.card-queue-card {
   box-sizing: border-box;
   background: rgba(40, 40, 40, 0.8);
   backdrop-filter: blur(8px);
@@ -21,18 +28,18 @@
   align-items: center;
   justify-content: center;
   min-width: 60px;
-  color: #efece5; /* Traditional paper color hint */
+  color: #efece5;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
 
-.idea-character {
+.card-queue-character {
   font-size: 24px;
   font-family: "Noto Serif SC", serif;
   margin-bottom: 2px;
 }
 
-.idea-meaning {
+.card-queue-meaning {
   font-size: 14px;
   opacity: 0.9;
   text-align: center;

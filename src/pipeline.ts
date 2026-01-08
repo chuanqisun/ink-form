@@ -33,6 +33,13 @@ export async function main() {
     musicToggle.textContent = soundscape.currentTrackIndex === -1 ? "Music: Off" : `Music: ${soundscape.currentTrackIndex + 1}`;
   });
 
+  let vfxEnabled = true;
+  const vfxToggle = document.getElementById("vfx-toggle") as HTMLButtonElement;
+  vfxToggle.addEventListener("click", () => {
+    vfxEnabled = !vfxEnabled;
+    vfxToggle.textContent = vfxEnabled ? "VFX: On" : "VFX: Off";
+  });
+
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 
   const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));
@@ -84,17 +91,19 @@ export async function main() {
           })
         );
 
-        const sound$ = designSound({ connection, concept: result.identified.meaning }).pipe(
-          mergeMap((description) => {
-            console.log("Sound design description:", description);
-            return generateSoundEffect(connection, description, soundscape.audioContext);
-          }),
-          catchError((err) => {
-            console.warn("Sound generation failed, proceeding with visual only:", err);
-            return of(null);
-          }),
-          defaultIfEmpty(null)
-        );
+        const sound$ = vfxEnabled
+          ? designSound({ connection, concept: result.identified.meaning }).pipe(
+              mergeMap((description) => {
+                console.log("Sound design description:", description);
+                return generateSoundEffect(connection, description, soundscape.audioContext);
+              }),
+              catchError((err) => {
+                console.warn("Sound generation failed, proceeding with visual only:", err);
+                return of(null);
+              }),
+              defaultIfEmpty(null)
+            )
+          : of(null);
 
         return zip(visual$, sound$).pipe(
           mergeMap(([_, buffer]) => (buffer ? soundscape.play(buffer, { loopCount: 0, stopOthers: true }) : of(undefined))),

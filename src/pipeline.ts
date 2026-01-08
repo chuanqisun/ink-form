@@ -76,7 +76,10 @@ export async function main() {
         if (next) stack.insertBefore(charCanvasElement, next);
         else stack.appendChild(charCanvasElement);
         const charCanvas = new CharacterCanvas(charCanvasElement.id);
-        charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
+        charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => {
+          drawCanvas.clear();
+          charCanvas.startDrying(boundingBox);
+        });
         const fast$ = from(identifyCharacterFast(connection, dataUrl)).pipe(
           tap((result) => console.log("Fast OCR", result)),
           map((meaning) => ({ identifiedMeaning: meaning, box: boundingBox, charCanvas }))
@@ -109,7 +112,6 @@ export async function main() {
             return of(null);
           }),
           finalize(() => {
-            result.charCanvas.destroy();
             generativeCanvas.clearOverlay();
           })
         );

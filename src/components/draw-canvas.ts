@@ -86,6 +86,7 @@ export class DrawingCanvas extends EventTarget {
   }
 
   private startDrawing(e: PointerEvent): void {
+    if (e.button !== 0) return;
     this.isDrawing = true;
     this.hasDrawn = false;
     this.dispatched = false;

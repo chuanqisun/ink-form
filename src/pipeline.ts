@@ -58,12 +58,11 @@ export async function main() {
         return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ identified: char, box: boundingBox, charCanvas })));
       }),
       tap((result) => {
+        console.log("Character", result.identified.character, "Meaning", result.identified.meaning);
         recognizedConcepts$.next(result.identified);
         history.add(result.identified);
       }),
       concatMap((result) => {
-        console.log("Character", result.identified.character, "Meaning", result.identified.meaning);
-
         const isEmpty = generativeCanvas.isCanvasEmpty();
         const overlayImage = isEmpty ? null : generativeCanvas.getOverlayImage(result.box);
         console.log("Overlay Image:", { overlayImage, result });

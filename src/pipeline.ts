@@ -7,6 +7,7 @@ import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
 import { startIdeaGeneration } from "./components/idea-generator";
 import { IdeaHints } from "./components/idea-hints";
+import { History } from "./components/history";
 import { identifyCharacter } from "./components/identify-character";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
@@ -20,6 +21,7 @@ export async function main() {
   const soundscape = new Soundscape();
   new CanvasStack("canvas-stack");
   const ideaHints = new IdeaHints();
+  const history = new History();
 
   const recognizedConcepts$ = new Subject<string>();
 
@@ -45,7 +47,10 @@ export async function main() {
         charCanvas.writeDataUrl(drawCanvas.readBase64DataUrl(true)).then(() => drawCanvas.clear());
         return from(identifyCharacter(connection, dataUrl)).pipe(map((char) => ({ identified: char, box: boundingBox, charCanvas })));
       }),
-      tap((result) => recognizedConcepts$.next(result.identified.meaning)),
+      tap((result) => {
+        recognizedConcepts$.next(result.identified.meaning);
+        history.addCharacter(result.identified);
+      }),
       concatMap((result) => {
         console.log("Character", result.identified.character, "Meaning", result.identified.meaning);
 
@@ -53,7 +58,9 @@ export async function main() {
         const overlayImage = isEmpty ? null : generativeCanvas.getOverlayImage(result.box);
         console.log("Overlay Image:", { overlayImage, result });
 
-        const visual$ = from(overlayImage ? editPainting(connection, overlayImage, result.identified.meaning) : generatePainting(connection, result.identified.meaning)).pipe(
+        const visual$ = from(
+          overlayImage ? editPainting(connection, overlayImage, result.identified.meaning) : generatePainting(connection, result.identified.meaning)
+        ).pipe(
           concatMap((imageUrls) => from(imageUrls)),
           take(1),
           concatMap(async (imageUrl) => {

@@ -6,8 +6,8 @@ export class CharacterCanvas extends EventTarget {
     const charCanvas = document.createElement("canvas");
     charCanvas.id = canvasId;
     charCanvas.classList.add("character-canvas");
-    charCanvas.width = 360;
-    charCanvas.height = 640;
+    charCanvas.width = 720;
+    charCanvas.height = 1280;
 
     return charCanvas;
   }

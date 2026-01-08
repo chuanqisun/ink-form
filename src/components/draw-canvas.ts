@@ -12,8 +12,8 @@ export class DrawingCanvas extends EventTarget {
   private lastDY: number = 0;
   private lastV: number = 0;
 
-  private readonly MAX_W = 18;
-  private readonly MIN_W = 1.5;
+  private readonly MAX_W = 14;
+  private readonly MIN_W = 2;
   private readonly SPEED_LIMIT = 40;
   private readonly LERP_SPEED = 0.15;
 

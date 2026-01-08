@@ -1,4 +1,4 @@
-import { catchError, concatMap, EMPTY, finalize, from, fromEvent, map, mergeMap, take, zip } from "rxjs";
+import { catchError, concatMap, defaultIfEmpty, EMPTY, finalize, from, fromEvent, map, mergeMap, of, take, zip } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
 import { CharacterCanvas } from "./components/character-canvas";
@@ -56,11 +56,16 @@ export async function main() {
           mergeMap((description) => {
             console.log("Sound design description:", description);
             return generateSoundEffect(connection, description, soundscape.audioContext);
-          })
+          }),
+          catchError((err) => {
+            console.warn("Sound generation failed, proceeding with visual only:", err);
+            return of(null);
+          }),
+          defaultIfEmpty(null)
         );
 
         return zip(visual$, sound$).pipe(
-          mergeMap(([_, buffer]) => soundscape.play(buffer, { loopCount: 0, stopOthers: true })),
+          mergeMap(([_, buffer]) => (buffer ? soundscape.play(buffer, { loopCount: 0, stopOthers: true }) : of(undefined))),
           catchError((err) => {
             console.error("Audio playback error:", err);
             return EMPTY;

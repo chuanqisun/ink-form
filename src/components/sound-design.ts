@@ -27,7 +27,7 @@ export function designSound(props: DesignSoundProps): Observable<string> {
         const model = "gemini-2.5-flash";
         const prompt = `Based on the concept "${concept}", write a one-sentence sound effect prompt for a text-to-sound AI. 
 The sound will be used to augment the experience of a Chinese traditional painting.
-The description should be a familiar sound that is clearly associated with the concept. If the concept does not naturally make a sound, describe Chinese traditional melody instead.
+The description should be a familiar sound that is directly made by the concept. If the concept does not naturally make a sound, describe Chinese traditional melody instead.
 In all scenarios, make sure the sound is loud and clear.
 Do not include any other text or preamble.`;
 

@@ -4,7 +4,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { AIConnection } from "./ai-connection";
 
 const characterSchema = z.object({
-  character: z.string().describe("The Chinese characters identified."),
+  character: z.string().describe("The Chinese/Kanji/Hiragana/Katakana/Korean characters identified."),
   meaning: z.string().describe("One word English definition."),
 });
 
@@ -51,10 +51,10 @@ export async function identifyCharacter(aiConnection: AIConnection, imageData: s
           },
         },
         {
-          text: `Identify the Chinese calligraphy character in this image. 
+          text: `Identify the Chinese/Kanji/Hiragana/Katakana/Korean calligraphy character in this image. 
 Respond in this JSON format:
 {
- "character": "<the identified Chinese character(s)>",
+ "character": "<the identified Chinese/Kanji/Hiragana/Katakana/Korean character(s)>",
  "meaning": "<One word English definition>"
 }
 `,
@@ -121,10 +121,10 @@ export async function identifyCharacterFast(aiConnection: AIConnection, imageDat
           },
         },
         {
-          text: `Identify the Chinese character/kanji in the image.
+          text: `Identify the Chinese/Kanji/Hiragana/Katakana/Korean character in the image.
 Respond in this format:
 """
-Character: <Character or Kanji>
+Character: <Character,Kanji,Hiragana,Katakana,Korean>
 Definition: <Short English definition, Sentence case>
 """
 Do not preamble or say anything else; just respond with the character and definition

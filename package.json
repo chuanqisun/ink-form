@@ -6,11 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "devDependencies": {
+    "@vitest/ui": "^4.0.18",
+    "happy-dom": "^20.3.7",
+    "jsdom": "^27.4.0",
     "typescript": "~5.9.3",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.29.0",

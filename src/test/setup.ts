@@ -45,7 +45,7 @@ beforeAll(() => {
     state = "inactive";
     stream: any;
     
-    constructor(stream: any, options?: any) {
+    constructor(stream: any, _options?: any) {
       this.stream = {
         ...stream,
         getTracks: vi.fn().mockReturnValue([

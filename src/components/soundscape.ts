@@ -100,6 +100,7 @@ export class Soundscape {
   private backgroundRequest$ = new Subject<number>();
   private readonly BACKGROUND_VOLUME = 0.75;
   private readonly BACKGROUND_LOW_VOLUME = 0.1;
+  private recordingDestination: MediaStreamAudioDestinationNode | null = null;
 
   private _sfxEnabled = false;
 
@@ -110,6 +111,13 @@ export class Soundscape {
   toggleSfx() {
     this._sfxEnabled = !this._sfxEnabled;
     return this._sfxEnabled;
+  }
+
+  /**
+   * Set recording destination for capturing audio
+   */
+  setRecordingDestination(destination: MediaStreamAudioDestinationNode | null) {
+    this.recordingDestination = destination;
   }
 
   constructor() {
@@ -217,6 +225,11 @@ export class Soundscape {
     gain.gain.value = this.activeVoices.size > 0 ? this.BACKGROUND_LOW_VOLUME : this.BACKGROUND_VOLUME;
     source.connect(gain);
     gain.connect(this.audioContext.destination);
+    
+    // Also connect to recording destination if recording
+    if (this.recordingDestination) {
+      gain.connect(this.recordingDestination);
+    }
 
     source.start();
     this.backgroundVoice = { source, gain };
@@ -258,6 +271,11 @@ export class Soundscape {
       const gain = this.audioContext.createGain();
       source.connect(gain);
       gain.connect(this.audioContext.destination);
+      
+      // Also connect to recording destination if recording
+      if (this.recordingDestination) {
+        gain.connect(this.recordingDestination);
+      }
 
       const now = this.audioContext.currentTime;
       const startTime = now + startDelay;

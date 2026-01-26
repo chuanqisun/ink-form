@@ -33,6 +33,12 @@ export class DrawingCanvas extends EventTarget {
     this.canvas.addEventListener("pointermove", (e: PointerEvent) => this.draw(e));
     this.canvas.addEventListener("pointerup", () => this.handlePointerup());
     this.canvas.addEventListener("mouseout", () => this.handleFinishDrawing());
+    
+    // Prevent context menu and text selection on long touch
+    this.canvas.addEventListener("contextmenu", (e: Event) => e.preventDefault());
+    this.canvas.style.webkitUserSelect = "none";
+    this.canvas.style.userSelect = "none";
+    (this.canvas.style as any).webkitTouchCallout = "none";
   }
 
   get element(): HTMLCanvasElement {

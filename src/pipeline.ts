@@ -18,6 +18,7 @@ import {
 } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
+import { CanvasOrientationManager } from "./components/canvas-orientation";
 import { CardQueue } from "./components/card-queue";
 import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
@@ -25,6 +26,7 @@ import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
 import { startIdeaGeneration } from "./components/idea-generator";
 import { identifyCharacter, identifyCharacterFast } from "./components/identify-character";
+import { RecordingManager } from "./components/recording-manager";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
 
@@ -37,6 +39,18 @@ export async function main() {
   new CanvasStack("canvas-stack");
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
+
+  // Initialize canvas orientation manager
+  const orientationManager = new CanvasOrientationManager([
+    "DrawCanvas",
+    "GenerativeCanvas",
+    "OverlayCanvas",
+    "debug",
+  ]);
+  orientationManager.initialize();
+
+  // Initialize recording manager
+  const recordingManager = new RecordingManager();
 
   const musicToggle = document.getElementById("music-toggle") as HTMLButtonElement;
   musicToggle.addEventListener("click", () => {
@@ -54,6 +68,51 @@ export async function main() {
     const enabled = soundscape.toggleSfx();
     sfxToggle.textContent = enabled ? "SFX: On" : "SFX: Off";
   });
+
+  // Add orientation toggle handler
+  const orientationToggle = document.getElementById("orientation-toggle") as HTMLButtonElement;
+  orientationToggle.addEventListener("click", () => {
+    orientationManager.toggle();
+    const orientation = orientationManager.getOrientation();
+    orientationToggle.textContent = orientation === "horizontal" ? "↕️ Vertical" : "↔️ Horizontal";
+    
+    // Clear canvases when orientation changes
+    drawCanvas.clear();
+    generativeCanvas.clear();
+  });
+
+  // Add recording toggle handler
+  const recordToggle = document.getElementById("record-toggle") as HTMLButtonElement;
+  recordToggle.addEventListener("click", async () => {
+    if (recordingManager.getIsRecording()) {
+      recordingManager.stopRecording();
+      soundscape.setRecordingDestination(null);
+      recordToggle.textContent = "⏺ Record";
+      recordToggle.style.color = "";
+    } else {
+      try {
+        await recordingManager.startRecording("GenerativeCanvas", soundscape.audioContext);
+        const audioDestination = recordingManager.getAudioDestination();
+        soundscape.setRecordingDestination(audioDestination);
+        recordToggle.textContent = "⏹ Stop";
+        recordToggle.style.color = "red";
+      } catch (error) {
+        console.error("Failed to start recording:", error);
+        alert("Failed to start recording. Please check console for details.");
+      }
+    }
+  });
+
+  // Handle recording events
+  recordingManager.addEventListener("recordingsaved", ((event: CustomEvent) => {
+    console.log("Recording saved:", event.detail.filename);
+  }) as EventListener);
+
+  recordingManager.addEventListener("recordingerror", ((event: CustomEvent) => {
+    console.error("Recording error:", event.detail.error);
+    recordToggle.textContent = "⏺ Record";
+    recordToggle.style.color = "";
+  }) as EventListener);
 
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 

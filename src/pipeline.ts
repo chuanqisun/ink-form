@@ -55,6 +55,21 @@ export async function main() {
     sfxToggle.textContent = enabled ? "SFX: On" : "SFX: Off";
   });
 
+  const layoutToggle = document.getElementById("layout-toggle") as HTMLButtonElement;
+  let isTopBottom = false;
+  layoutToggle.addEventListener("click", () => {
+    isTopBottom = !isTopBottom;
+    if (isTopBottom) {
+      ideaHints.setSide("top");
+      history.setSide("bottom");
+      layoutToggle.textContent = "Layout: Top-Bottom";
+    } else {
+      ideaHints.setSide("right");
+      history.setSide("left");
+      layoutToggle.textContent = "Layout: Left-Right";
+    }
+  });
+
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 
   const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));

@@ -5,7 +5,7 @@ export interface CardEntry {
   meaning: string;
 }
 
-export type QueueSide = "left" | "right";
+export type QueueSide = "left" | "right" | "top" | "bottom";
 
 export class CardQueue {
   private container: HTMLDivElement;
@@ -19,6 +19,23 @@ export class CardQueue {
     this.container = document.createElement("div");
     this.container.className = `card-queue-container ${side}`;
     document.body.appendChild(this.container);
+  }
+
+  setSide(side: QueueSide) {
+    this.container.classList.remove(this.side);
+    this.side = side;
+    this.container.classList.add(side);
+  }
+
+  private isHorizontal() {
+    return this.side === "top" || this.side === "bottom";
+  }
+
+  private getEntryTranslate() {
+    if (this.isHorizontal()) {
+      return this.side === "top" ? "translateY(-20px)" : "translateY(20px)";
+    }
+    return this.side === "left" ? "translateX(-20px)" : "translateX(20px)";
   }
 
   add(entry: CardEntry) {
@@ -41,28 +58,32 @@ export class CardQueue {
     this.cards.unshift(card);
 
     const fullHeight = card.offsetHeight;
+    const fullWidth = card.offsetWidth;
     const gap = 12;
-    const moveX = this.side === "left" ? "-20px" : "20px";
+    const moveTranslate = this.getEntryTranslate();
+    const horizontal = this.isHorizontal();
 
     // Entry animation
     card.animate(
       [
         {
-          height: "0px",
+          ...(horizontal ? { width: "0px" } : { height: "0px" }),
           opacity: 0,
-          transform: `translateX(${moveX}) scale(0.9)`,
-          marginBottom: "0px",
+          transform: `${moveTranslate} scale(0.9)`,
+          ...(horizontal ? { marginRight: "0px" } : { marginBottom: "0px" }),
           paddingTop: "0px",
           paddingBottom: "0px",
+          ...(horizontal ? { paddingLeft: "0px", paddingRight: "0px" } : {}),
           borderWidth: "0px",
         },
         {
-          height: `${fullHeight}px`,
+          ...(horizontal ? { width: `${fullWidth}px` } : { height: `${fullHeight}px` }),
           opacity: 1,
-          transform: "translateX(0) scale(1)",
-          marginBottom: `${gap}px`,
+          transform: "translate(0, 0) scale(1)",
+          ...(horizontal ? { marginRight: `${gap}px` } : { marginBottom: `${gap}px` }),
           paddingTop: "12px",
           paddingBottom: "12px",
+          ...(horizontal ? { paddingLeft: "12px", paddingRight: "12px" } : {}),
           borderWidth: "1px",
         },
       ],
@@ -77,15 +98,20 @@ export class CardQueue {
     if (this.cards.length > this.maxVisibleCards) {
       const oldestCard = this.cards.pop();
       if (oldestCard) {
+        const oldWidth = oldestCard.offsetWidth;
+        const oldHeight = oldestCard.offsetHeight;
         oldestCard
           .animate(
             [
-              { opacity: 1, transform: "scale(1)", height: `${oldestCard.offsetHeight}px` },
+              {
+                opacity: 1,
+                transform: "scale(1)",
+                ...(horizontal ? { width: `${oldWidth}px` } : { height: `${oldHeight}px` }),
+              },
               {
                 opacity: 0,
-                transform: `scale(0.9) translateX(${moveX})`,
-                height: "0px",
-                marginBottom: "0px",
+                transform: `scale(0.9) ${moveTranslate}`,
+                ...(horizontal ? { width: "0px", marginRight: "0px", paddingLeft: "0px", paddingRight: "0px" } : { height: "0px", marginBottom: "0px" }),
                 paddingTop: "0px",
                 paddingBottom: "0px",
                 borderWidth: "0px",

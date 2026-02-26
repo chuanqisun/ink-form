@@ -1,19 +1,43 @@
 .card-queue-container {
   position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
   display: grid;
-  grid-template-columns: auto;
   z-index: 1000;
   pointer-events: none;
 }
 
 .card-queue-container.left {
+  top: 50%;
+  transform: translateY(-50%);
+  grid-template-columns: auto;
   left: 20px;
 }
 
 .card-queue-container.right {
+  top: 50%;
+  transform: translateY(-50%);
+  grid-template-columns: auto;
   right: 20px;
+}
+
+.card-queue-container.top {
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  grid-auto-flow: column;
+  grid-template-rows: auto;
+}
+
+.card-queue-container.bottom {
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  grid-auto-flow: column;
+  grid-template-rows: auto;
+}
+
+.card-queue-container.top .card-queue-card,
+.card-queue-container.bottom .card-queue-card {
+  margin-bottom: 0;
 }
 
 .card-queue-card {

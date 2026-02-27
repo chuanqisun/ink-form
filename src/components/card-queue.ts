@@ -21,6 +21,16 @@ export class CardQueue {
     document.body.appendChild(this.container);
   }
 
+  setMappingMode(enabled: boolean, anchorElement?: HTMLElement) {
+    if (enabled && anchorElement) {
+      this.container.classList.add("mapping");
+      anchorElement.appendChild(this.container);
+    } else {
+      this.container.classList.remove("mapping");
+      document.body.appendChild(this.container);
+    }
+  }
+
   setSide(side: QueueSide) {
     this.container.classList.remove(this.side);
     this.side = side;

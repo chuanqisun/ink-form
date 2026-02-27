@@ -5,6 +5,38 @@
   pointer-events: none;
 }
 
+.card-queue-container.mapping {
+  position: absolute;
+  --card-queue-gap: 16px;
+
+  .left {
+    left: var(--card-queue-gap);
+  }
+  .right {
+    right: var(--card-queue-gap);
+  }
+  .top {
+    top: var(--card-queue-gap);
+  }
+  .bottom {
+    bottom: var(--card-queue-gap);
+  }
+
+  .card-queue-card {
+    padding: 8px;
+    min-width: 44px;
+    border-radius: 4px;
+  }
+
+  .card-queue-meaning {
+    font-size: 10px;
+  }
+
+  .card-queue-character {
+    font-size: 14px;
+  }
+}
+
 .card-queue-container.left {
   top: 50%;
   transform: translateY(-50%);

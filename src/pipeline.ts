@@ -70,6 +70,15 @@ export async function main() {
     }
   });
 
+  const mappingToggle = document.getElementById("mapping-toggle") as HTMLButtonElement;
+  const canvasStack = document.getElementById("canvas-stack")!;
+  mappingToggle.addEventListener("click", () => {
+    drawCanvas.inputMapping = !drawCanvas.inputMapping;
+    mappingToggle.textContent = drawCanvas.inputMapping ? "Mapping: On" : "Mapping: Off";
+    ideaHints.setMappingMode(drawCanvas.inputMapping, canvasStack);
+    history.setMappingMode(drawCanvas.inputMapping, canvasStack);
+  });
+
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 
   const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));

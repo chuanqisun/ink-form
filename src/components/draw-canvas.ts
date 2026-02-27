@@ -17,6 +17,63 @@ export class DrawingCanvas extends EventTarget {
   private readonly SPEED_LIMIT = 35;
   private readonly LERP_SPEED = 0.4;
 
+  private _inputMapping: boolean = false;
+
+  // Bound handlers for window-level listeners (so we can remove them)
+  private boundStartDrawing = (e: PointerEvent) => this.startDrawing(e);
+  private boundDraw = (e: PointerEvent) => this.draw(e);
+  private boundPointerup = () => this.handlePointerup();
+  private boundFinish = () => this.handleFinishDrawing();
+  private boundPreventDefault = (e: Event) => e.preventDefault();
+
+  get inputMapping(): boolean {
+    return this._inputMapping;
+  }
+
+  set inputMapping(value: boolean) {
+    if (this._inputMapping === value) return;
+    this._inputMapping = value;
+
+    if (value) {
+      // Remove canvas listeners, add window listeners
+      this.canvas.removeEventListener("pointerdown", this.boundStartDrawing);
+      this.canvas.removeEventListener("pointermove", this.boundDraw);
+      this.canvas.removeEventListener("pointerup", this.boundPointerup);
+      this.canvas.removeEventListener("mouseout", this.boundFinish);
+
+      window.addEventListener("pointerdown", this.boundStartDrawing);
+      window.addEventListener("pointermove", this.boundDraw);
+      window.addEventListener("pointerup", this.boundPointerup);
+
+      // Prevent browser defaults that interrupt pointer capture
+      window.addEventListener("touchmove", this.boundPreventDefault, { passive: false } as EventListenerOptions);
+      window.addEventListener("dragstart", this.boundPreventDefault);
+      window.addEventListener("selectstart", this.boundPreventDefault);
+      window.addEventListener("contextmenu", this.boundPreventDefault);
+      document.body.style.touchAction = "none";
+      document.body.style.userSelect = "none";
+      (document.body.style as any).webkitUserSelect = "none";
+    } else {
+      // Remove window listeners, restore canvas listeners
+      window.removeEventListener("pointerdown", this.boundStartDrawing);
+      window.removeEventListener("pointermove", this.boundDraw);
+      window.removeEventListener("pointerup", this.boundPointerup);
+
+      window.removeEventListener("touchmove", this.boundPreventDefault);
+      window.removeEventListener("dragstart", this.boundPreventDefault);
+      window.removeEventListener("selectstart", this.boundPreventDefault);
+      window.removeEventListener("contextmenu", this.boundPreventDefault);
+      document.body.style.touchAction = "";
+      document.body.style.userSelect = "";
+      (document.body.style as any).webkitUserSelect = "";
+
+      this.canvas.addEventListener("pointerdown", this.boundStartDrawing);
+      this.canvas.addEventListener("pointermove", this.boundDraw);
+      this.canvas.addEventListener("pointerup", this.boundPointerup);
+      this.canvas.addEventListener("mouseout", this.boundFinish);
+    }
+  }
+
   constructor(canvasId: string) {
     super();
 
@@ -29,10 +86,10 @@ export class DrawingCanvas extends EventTarget {
     this.ctx.lineCap = "round";
     this.ctx.lineJoin = "round";
     this.ctx.strokeStyle = "#000";
-    this.canvas.addEventListener("pointerdown", (e: PointerEvent) => this.startDrawing(e));
-    this.canvas.addEventListener("pointermove", (e: PointerEvent) => this.draw(e));
-    this.canvas.addEventListener("pointerup", () => this.handlePointerup());
-    this.canvas.addEventListener("mouseout", () => this.handleFinishDrawing());
+    this.canvas.addEventListener("pointerdown", this.boundStartDrawing);
+    this.canvas.addEventListener("pointermove", this.boundDraw);
+    this.canvas.addEventListener("pointerup", this.boundPointerup);
+    this.canvas.addEventListener("mouseout", this.boundFinish);
   }
 
   get element(): HTMLCanvasElement {
@@ -73,6 +130,17 @@ export class DrawingCanvas extends EventTarget {
   }
 
   private getCanvasPoint(clientX: number, clientY: number): { x: number; y: number } {
+    if (this.inputMapping) {
+      // Map full-window horizontal input to portrait canvas with rotation:
+      // source (0,0) → canvas top-right, source (0,yMax) → canvas top-left
+      // source (xMax,0) → canvas bottom-right, source (xMax,yMax) → canvas bottom-left
+      const sourceNormX = clientX / window.innerWidth;
+      const sourceNormY = clientY / window.innerHeight;
+      return {
+        x: (1 - sourceNormY) * this.canvas.width,
+        y: sourceNormX * this.canvas.height,
+      };
+    }
     const rect = this.canvas.getBoundingClientRect();
     const style = window.getComputedStyle(this.canvas);
     const borderLeft = parseFloat(style.borderLeftWidth);
@@ -87,6 +155,7 @@ export class DrawingCanvas extends EventTarget {
 
   private startDrawing(e: PointerEvent): void {
     if (e.button !== 0) return;
+    if (this._inputMapping) e.preventDefault();
     this.isDrawing = true;
     this.hasDrawn = false;
     this.dispatched = false;

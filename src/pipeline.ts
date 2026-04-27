@@ -18,6 +18,8 @@ import {
 } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
 import { CanvasStack } from "./components/canvas-stack";
+import { CanvasSequenceExporter, type CanvasSequenceExporterStatus } from "./components/canvas-exporter";
+import { CanvasHistory } from "./components/canvas-history";
 import { CardQueue } from "./components/card-queue";
 import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
@@ -37,8 +39,108 @@ export async function main() {
   const soundscape = new Soundscape();
   new CanvasStack("canvas-stack");
   const canvasStack = document.getElementById("canvas-stack")!;
+  const exportDialog = document.getElementById("export-dialog") as HTMLDialogElement;
+  const exportDirectoryButton = document.getElementById("export-directory-button") as HTMLButtonElement;
+  const chooseExportDirectoryButton = document.getElementById("choose-export-directory") as HTMLButtonElement;
+  const skipExportDirectoryButton = document.getElementById("skip-export-directory") as HTMLButtonElement;
+  const exportStatus = document.getElementById("export-status") as HTMLSpanElement;
+  const clearCanvasButton = document.getElementById("clear-canvas-button") as HTMLButtonElement;
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
+
+  generativeCanvas.clear();
+  generativeCanvas.clearOverlay();
+
+  const renderHistory = new CanvasHistory(generativeCanvas, { maxEntries: 40 });
+  const exporter = new CanvasSequenceExporter(generativeCanvas.element);
+
+  const syncExportUi = ({ directoryName, message, supportsDirectoryPicker }: CanvasSequenceExporterStatus) => {
+    exportStatus.textContent = message;
+    exportDirectoryButton.textContent = directoryName ? `Export: ${directoryName}` : "Export Dir";
+    exportDirectoryButton.disabled = !supportsDirectoryPicker;
+  };
+
+  exporter.addEventListener("statuschange", (event) => {
+    syncExportUi((event as CustomEvent<CanvasSequenceExporterStatus>).detail);
+  });
+  syncExportUi(exporter.status);
+
+  const saveRenderedCanvas = async () => {
+    renderHistory.capture();
+    await exporter.captureFrame();
+  };
+
+  const clearRenderedCanvas = async () => {
+    drawCanvas.clear();
+    generativeCanvas.clear();
+    generativeCanvas.clearOverlay();
+    renderHistory.reset();
+    await exporter.startSequence({ captureCurrentFrame: true });
+  };
+
+  const chooseExportDirectory = async (): Promise<boolean> => {
+    const selected = await exporter.pickDirectory();
+    if (!selected) {
+      return false;
+    }
+
+    await exporter.startSequence({ captureCurrentFrame: true });
+    return true;
+  };
+
+  clearCanvasButton.addEventListener("click", () => {
+    void clearRenderedCanvas();
+  });
+
+  exportDirectoryButton.addEventListener("click", () => {
+    void chooseExportDirectory();
+  });
+
+  chooseExportDirectoryButton.addEventListener("click", () => {
+    void chooseExportDirectory().then((selected) => {
+      if (selected) {
+        exportDialog.close("selected");
+      }
+    });
+  });
+
+  skipExportDirectoryButton.addEventListener("click", () => {
+    exportDialog.close("skipped");
+  });
+
+  if (exporter.supportsDirectoryPicker) {
+    exportDialog.showModal();
+  }
+
+  const isTypingTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+  };
+
+  window.addEventListener("keydown", (event) => {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || isTypingTarget(event.target) || document.querySelector("dialog[open]")) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+
+    if (key === "z") {
+      event.preventDefault();
+      const changed = event.shiftKey ? renderHistory.redo() : renderHistory.undo();
+      if (changed) {
+        void exporter.captureFrame();
+      }
+      return;
+    }
+
+    if (key === "l" && !event.shiftKey) {
+      event.preventDefault();
+      void clearRenderedCanvas();
+    }
+  });
 
   const setCanvasAnchoring = (enabled: boolean) => {
     ideaHints.setMappingMode(enabled, canvasStack);
@@ -144,6 +246,7 @@ export async function main() {
           take(1),
           concatMap(async (imageUrl) => {
             await generativeCanvas.writeDataUrl(imageUrl);
+            await saveRenderedCanvas();
           }),
           catchError((err) => {
             console.error("Visual generation error:", err);

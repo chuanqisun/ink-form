@@ -72,6 +72,7 @@ export class GenerativeCanvas extends EventTarget {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
         resolve();
       };
@@ -81,7 +82,6 @@ export class GenerativeCanvas extends EventTarget {
   }
 
   clear(): void {
-    this.ctx.fillStyle = "white";
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 }

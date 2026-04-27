@@ -153,14 +153,28 @@
     </style>
   </head>
   <body>
+    <dialog id="export-dialog" class="export-dialog">
+      <div class="export-dialog-body">
+        <h2>Capture Directory</h2>
+        <p>Choose a directory for automatic rendered-canvas exports before the demo starts.</p>
+        <div class="export-dialog-actions">
+          <button type="button" id="skip-export-directory">Skip</button>
+          <button type="button" id="choose-export-directory">Choose Directory</button>
+        </div>
+      </div>
+    </dialog>
+
     <header class="app-header">
       <button commandfor="canvas-stack" command="--toggle-debug">Debug</button>
       <button commandfor="connection-dialog" command="show-modal">Setup</button>
       <button id="music-toggle">Music: Off</button>
       <button id="sfx-toggle">SFX: Off</button>
+      <button id="clear-canvas-button">Clear Canvas</button>
+      <button id="export-directory-button">Export Dir</button>
       <button id="layout-toggle">Layout: Left-Right</button>
       <button id="calibrate-toggle">Calibrate</button>
       <button id="flip-toggle">Flip: Off</button>
+      <span id="export-status" class="header-status">Choose an export directory</span>
     </header>
 
     <div id="canvas-stack" class="canvas-stack">

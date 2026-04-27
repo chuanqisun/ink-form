@@ -46,6 +46,11 @@
           pointer-events: none;
         }
 
+        .overlay-canvas {
+          position: relative;
+          z-index: 3;
+        }
+
         &:not(.debug) {
           display: grid;
           place-content: center;
@@ -58,6 +63,19 @@
           #debug,
           .overlay-canvas {
             display: none;
+          }
+        }
+
+        &.calibrating {
+          .overlay-canvas {
+            display: block;
+          }
+        }
+
+        &:not(.debug).calibrating {
+          .overlay-canvas {
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
           }
         }
 
@@ -91,6 +109,12 @@
             grid-area: outline;
           }
         }
+
+        &.debug.calibrating {
+          .overlay-canvas {
+            grid-area: draw;
+          }
+        }
       }
 
       .app-header {
@@ -116,7 +140,7 @@
       <button id="music-toggle">Music: Off</button>
       <button id="sfx-toggle">SFX: Off</button>
       <button id="layout-toggle">Layout: Left-Right</button>
-      <button id="mapping-toggle">Mapping: Off</button>
+      <button id="calibrate-toggle">Calibrate</button>
       <button id="flip-toggle">Flip: Off</button>
     </header>
 

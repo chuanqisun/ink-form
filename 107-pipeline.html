@@ -22,6 +22,10 @@
         &:has(.canvas-stack.debug) {
           background-color: white;
         }
+
+        &.flip-x {
+          transform: scaleX(-1);
+        }
       }
 
       .canvas-stack {
@@ -93,6 +97,11 @@
         position: fixed;
         top: 0;
         left: 0;
+        width: 100%;
+
+        body.flip-x & {
+          transform: scaleX(-1);
+        }
 
         &:not(:hover, :focus) {
           opacity: 0;
@@ -108,6 +117,7 @@
       <button id="sfx-toggle">SFX: Off</button>
       <button id="layout-toggle">Layout: Left-Right</button>
       <button id="mapping-toggle">Mapping: Off</button>
+      <button id="flip-toggle">Flip: Off</button>
     </header>
 
     <div id="canvas-stack" class="canvas-stack">

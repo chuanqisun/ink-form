@@ -79,6 +79,12 @@ export async function main() {
     history.setMappingMode(drawCanvas.inputMapping, canvasStack);
   });
 
+  const flipToggle = document.getElementById("flip-toggle") as HTMLButtonElement;
+  flipToggle.addEventListener("click", () => {
+    const isFlipped = document.body.classList.toggle("flip-x");
+    flipToggle.textContent = isFlipped ? "Flip: On" : "Flip: Off";
+  });
+
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();
 
   const ideasHinting$ = startIdeaGeneration(recognizedConcepts$).pipe(tap((idea) => ideaHints.add(idea)));

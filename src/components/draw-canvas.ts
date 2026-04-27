@@ -1,112 +1,13 @@
-interface Point {
+export interface DrawingPoint {
   x: number;
   y: number;
 }
 
-type HomographyMatrix = [number, number, number, number, number, number, number, number, number];
-
-const CALIBRATION_CORNERS: readonly Point[] = Object.freeze([
-  { x: 0, y: 0 },
-  { x: 1, y: 0 },
-  { x: 1, y: 1 },
-  { x: 0, y: 1 },
-]);
-
-const CALIBRATION_INSET_RATIO = 0.06;
-const HOMOGRAPHY_EPSILON = 1e-8;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function solveLinearSystem(matrix: number[][], values: number[]): number[] | null {
-  const size = values.length;
-  const augmented = matrix.map((row, index) => [...row, values[index]]);
-
-  for (let pivotIndex = 0; pivotIndex < size; pivotIndex += 1) {
-    let bestRow = pivotIndex;
-    let bestValue = Math.abs(augmented[pivotIndex][pivotIndex]);
-
-    for (let candidate = pivotIndex + 1; candidate < size; candidate += 1) {
-      const candidateValue = Math.abs(augmented[candidate][pivotIndex]);
-      if (candidateValue > bestValue) {
-        bestValue = candidateValue;
-        bestRow = candidate;
-      }
-    }
-
-    if (bestValue < HOMOGRAPHY_EPSILON) {
-      return null;
-    }
-
-    if (bestRow !== pivotIndex) {
-      [augmented[pivotIndex], augmented[bestRow]] = [augmented[bestRow], augmented[pivotIndex]];
-    }
-
-    const pivot = augmented[pivotIndex][pivotIndex];
-    for (let column = pivotIndex; column <= size; column += 1) {
-      augmented[pivotIndex][column] /= pivot;
-    }
-
-    for (let row = 0; row < size; row += 1) {
-      if (row === pivotIndex) {
-        continue;
-      }
-
-      const factor = augmented[row][pivotIndex];
-      if (Math.abs(factor) < HOMOGRAPHY_EPSILON) {
-        continue;
-      }
-
-      for (let column = pivotIndex; column <= size; column += 1) {
-        augmented[row][column] -= factor * augmented[pivotIndex][column];
-      }
-    }
-  }
-
-  return augmented.map((row) => row[size]);
-}
-
-function computeHomography(sourcePoints: Point[], targetPoints: Point[]): HomographyMatrix | null {
-  if (sourcePoints.length !== 4 || targetPoints.length !== 4) {
-    return null;
-  }
-
-  const matrix: number[][] = [];
-  const values: number[] = [];
-
-  for (let index = 0; index < sourcePoints.length; index += 1) {
-    const source = sourcePoints[index];
-    const target = targetPoints[index];
-
-    matrix.push([source.x, source.y, 1, 0, 0, 0, -target.x * source.x, -target.x * source.y]);
-    values.push(target.x);
-
-    matrix.push([0, 0, 0, source.x, source.y, 1, -target.y * source.x, -target.y * source.y]);
-    values.push(target.y);
-  }
-
-  const solution = solveLinearSystem(matrix, values);
-  if (!solution) {
-    return null;
-  }
-
-  return [solution[0], solution[1], solution[2], solution[3], solution[4], solution[5], solution[6], solution[7], 1];
-}
-
-function applyHomography(matrix: HomographyMatrix, point: Point): Point | null {
-  const denominator = matrix[6] * point.x + matrix[7] * point.y + matrix[8];
-  if (!Number.isFinite(denominator) || Math.abs(denominator) < HOMOGRAPHY_EPSILON) {
-    return null;
-  }
-
-  const x = (matrix[0] * point.x + matrix[1] * point.y + matrix[2]) / denominator;
-  const y = (matrix[3] * point.x + matrix[4] * point.y + matrix[5]) / denominator;
-  if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    return null;
-  }
-
-  return { x, y };
+export interface DrawingInputAdapter {
+  eventTarget: "canvas" | "window";
+  preventDefault?: boolean;
+  shouldStart?: (event: PointerEvent) => boolean;
+  mapClientPoint: (clientPoint: DrawingPoint, canvas: HTMLCanvasElement) => DrawingPoint | null;
 }
 
 export class DrawingCanvas extends EventTarget {
@@ -128,62 +29,15 @@ export class DrawingCanvas extends EventTarget {
   private readonly SPEED_LIMIT = 35;
   private readonly LERP_SPEED = 0.4;
 
-  private inputCalibration: HomographyMatrix | null = null;
-  private calibrationFlipX = false;
-  private inputLocked = false;
+  private inputAdapter: DrawingInputAdapter | null = null;
+  private interactionLocked = false;
   private usingWindowInput = false;
 
-  // Bound handlers for window-level listeners (so we can remove them)
   private boundStartDrawing = (e: PointerEvent) => this.startDrawing(e);
   private boundDraw = (e: PointerEvent) => this.draw(e);
   private boundPointerup = () => this.handlePointerup();
   private boundFinish = () => this.handleFinishDrawing();
   private boundPreventDefault = (e: Event) => e.preventDefault();
-
-  get hasInputCalibration(): boolean {
-    return this.inputCalibration !== null;
-  }
-
-  setInputLocked(locked: boolean): void {
-    if (this.inputLocked === locked) {
-      return;
-    }
-
-    this.inputLocked = locked;
-    if (locked) {
-      this.cancelStroke();
-    }
-  }
-
-  getCalibrationTargets(): Point[] {
-    return CALIBRATION_CORNERS.map(({ x, y }) => ({
-      x: (CALIBRATION_INSET_RATIO + x * (1 - CALIBRATION_INSET_RATIO * 2)) * this.canvas.width,
-      y: (CALIBRATION_INSET_RATIO + y * (1 - CALIBRATION_INSET_RATIO * 2)) * this.canvas.height,
-    }));
-  }
-
-  applyInputCalibration(sourcePoints: Point[], targetPoints: Point[]): boolean {
-    const normalizedSource = sourcePoints.map((point) => this.normalizeViewportPoint(point));
-    const normalizedTarget = targetPoints.map((point) => this.normalizeCanvasPoint(point));
-    const nextCalibration = computeHomography(normalizedSource, normalizedTarget);
-    if (!nextCalibration) {
-      return false;
-    }
-
-    this.inputCalibration = nextCalibration;
-    this.calibrationFlipX = document.body.classList.contains("flip-x");
-    this.syncInputListeners();
-    return true;
-  }
-
-  clearInputCalibration(): void {
-    if (!this.inputCalibration) {
-      return;
-    }
-
-    this.inputCalibration = null;
-    this.syncInputListeners();
-  }
 
   constructor(canvasId: string) {
     super();
@@ -202,6 +56,22 @@ export class DrawingCanvas extends EventTarget {
 
   get element(): HTMLCanvasElement {
     return this.canvas;
+  }
+
+  setInputAdapter(adapter: DrawingInputAdapter | null): void {
+    this.inputAdapter = adapter;
+    this.syncInputListeners();
+  }
+
+  setInteractionLocked(locked: boolean): void {
+    if (this.interactionLocked === locked) {
+      return;
+    }
+
+    this.interactionLocked = locked;
+    if (locked) {
+      this.cancelStroke();
+    }
   }
 
   readImage() {
@@ -278,7 +148,7 @@ export class DrawingCanvas extends EventTarget {
   }
 
   private syncInputListeners(): void {
-    const shouldUseWindowInput = this.hasInputCalibration;
+    const shouldUseWindowInput = this.inputAdapter?.eventTarget === "window";
     if (this.usingWindowInput === shouldUseWindowInput) {
       return;
     }
@@ -294,46 +164,9 @@ export class DrawingCanvas extends EventTarget {
     this.attachCanvasListeners();
   }
 
-  private normalizeViewportPoint(point: Point): Point {
-    if (point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1) {
-      return point;
-    }
-
-    const viewportWidth = Math.max(window.innerWidth, 1);
-    const viewportHeight = Math.max(window.innerHeight, 1);
-    return {
-      x: point.x / viewportWidth,
-      y: point.y / viewportHeight,
-    };
-  }
-
-  private normalizeCanvasPoint(point: Point): Point {
-    if (point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1) {
-      return point;
-    }
-
-    return {
-      x: point.x / this.canvas.width,
-      y: point.y / this.canvas.height,
-    };
-  }
-
-  private getCanvasPoint(clientX: number, clientY: number): { x: number; y: number } | null {
-    if (this.inputCalibration) {
-      const mappedPoint = applyHomography(this.inputCalibration, this.normalizeViewportPoint({ x: clientX, y: clientY }));
-      if (!mappedPoint) {
-        return null;
-      }
-
-      let x = mappedPoint.x * this.canvas.width;
-      if (document.body.classList.contains("flip-x") !== this.calibrationFlipX) {
-        x = this.canvas.width - x;
-      }
-
-      return {
-        x: clamp(x, 0, this.canvas.width),
-        y: clamp(mappedPoint.y * this.canvas.height, 0, this.canvas.height),
-      };
+  private getCanvasPoint(clientX: number, clientY: number): DrawingPoint | null {
+    if (this.inputAdapter) {
+      return this.inputAdapter.mapClientPoint({ x: clientX, y: clientY }, this.canvas);
     }
 
     const rect = this.canvas.getBoundingClientRect();
@@ -346,18 +179,11 @@ export class DrawingCanvas extends EventTarget {
     if (document.body.classList.contains("flip-x")) {
       x = this.canvas.width - x;
     }
+
     return {
       x,
       y: (clientY - rect.top - borderTop) * scaleY,
     };
-  }
-
-  private shouldIgnorePointerTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof Element)) {
-      return false;
-    }
-
-    return Boolean(target.closest("button, input, textarea, select, dialog, label, a, [contenteditable='true'], .card-queue-container"));
   }
 
   private cancelStroke(): void {
@@ -366,10 +192,10 @@ export class DrawingCanvas extends EventTarget {
   }
 
   private startDrawing(e: PointerEvent): void {
-    if (this.inputLocked) return;
+    if (this.interactionLocked) return;
     if (e.button !== 0) return;
-    if (this.inputCalibration && this.shouldIgnorePointerTarget(e.target)) return;
-    if (this.hasInputCalibration) e.preventDefault();
+    if (this.inputAdapter?.shouldStart && !this.inputAdapter.shouldStart(e)) return;
+    if (this.inputAdapter?.preventDefault) e.preventDefault();
 
     const pos = this.getCanvasPoint(e.clientX, e.clientY);
     if (!pos) {
@@ -389,7 +215,7 @@ export class DrawingCanvas extends EventTarget {
   }
 
   private draw(e: PointerEvent): void {
-    if (this.inputLocked) return;
+    if (this.interactionLocked) return;
     if (!this.isDrawing) return;
     this.resetTimer();
     const pos = this.getCanvasPoint(e.clientX, e.clientY);
@@ -400,12 +226,7 @@ export class DrawingCanvas extends EventTarget {
     const dx = pos.x - this.lastX;
     const dy = pos.y - this.lastY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-
-    // 1. Calculate the target width based on speed
     const targetW = Math.max(this.MIN_W, this.MAX_W - (dist / this.SPEED_LIMIT) * (this.MAX_W - this.MIN_W));
-
-    // 2. Sub-segmenting: Bridge the gap between mouse events
-    // We draw a line every 2 pixels to ensure the width tapers smoothly
     const steps = Math.max(1, Math.ceil(dist / 2));
 
     let currentX = this.lastX;
@@ -413,12 +234,8 @@ export class DrawingCanvas extends EventTarget {
 
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-
-      // Interpolate position
       const nextX = this.lastX + dx * t;
       const nextY = this.lastY + dy * t;
-
-      // Interpolate width (Lerp from last width to target width)
       const nextW = this.lastW + (targetW - this.lastW) * (i / steps) * this.LERP_SPEED;
 
       this.ctx.beginPath();
@@ -431,7 +248,6 @@ export class DrawingCanvas extends EventTarget {
       currentY = nextY;
     }
 
-    // Store state for next frame
     this.lastDX = dx;
     this.lastDY = dy;
     this.lastV = dist;
@@ -444,8 +260,6 @@ export class DrawingCanvas extends EventTarget {
   private handlePointerup(): void {
     if (!this.isDrawing) return;
 
-    // 3. The "Flick" (Sharp Ending)
-    // If moving fast when released, continue the line while tapering to zero
     if (this.lastV > 5) {
       let flickX = this.lastX;
       let flickY = this.lastY;

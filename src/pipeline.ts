@@ -25,13 +25,9 @@ import { editPainting, generatePainting } from "./components/generate-painting";
 import { GenerativeCanvas } from "./components/generative-canvas";
 import { startIdeaGeneration } from "./components/idea-generator";
 import { identifyCharacter, identifyCharacterFast } from "./components/identify-character";
+import { InputCalibrationController } from "./components/input-calibration";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
-
-interface Point {
-  x: number;
-  y: number;
-}
 
 export async function main() {
   const connection = new AIConnection();
@@ -41,52 +37,13 @@ export async function main() {
   const soundscape = new Soundscape();
   new CanvasStack("canvas-stack");
   const canvasStack = document.getElementById("canvas-stack")!;
-  const overlayCanvas = document.getElementById("OverlayCanvas") as HTMLCanvasElement;
-  const overlayCtx = overlayCanvas.getContext("2d")!;
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
-  let isCalibrating = false;
-  let currentCalibrationStep = -1;
 
   const setCanvasAnchoring = (enabled: boolean) => {
     ideaHints.setMappingMode(enabled, canvasStack);
     history.setMappingMode(enabled, canvasStack);
   };
-
-  const clearCalibrationOverlay = () => {
-    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  };
-
-  const drawCalibrationTarget = (point: Point) => {
-    clearCalibrationOverlay();
-    overlayCtx.save();
-    overlayCtx.fillStyle = "#ff3b30";
-    overlayCtx.strokeStyle = "#ffffff";
-    overlayCtx.lineWidth = 4;
-    overlayCtx.beginPath();
-    overlayCtx.arc(point.x, point.y, 18, 0, Math.PI * 2);
-    overlayCtx.fill();
-    overlayCtx.stroke();
-    overlayCtx.restore();
-  };
-
-  const captureCalibrationTouch = () =>
-    new Promise<Point>((resolve) => {
-      const handlePointerDown = (event: PointerEvent) => {
-        if (event.button !== 0) {
-          return;
-        }
-
-        event.preventDefault();
-        window.removeEventListener("pointerdown", handlePointerDown, true);
-        resolve({
-          x: event.clientX / Math.max(window.innerWidth, 1),
-          y: event.clientY / Math.max(window.innerHeight, 1),
-        });
-      };
-
-      window.addEventListener("pointerdown", handlePointerDown, { capture: true, passive: false });
-    });
 
   const musicToggle = document.getElementById("music-toggle") as HTMLButtonElement;
   musicToggle.addEventListener("click", () => {
@@ -120,59 +77,15 @@ export async function main() {
     }
   });
 
-  const calibrateToggle = document.getElementById("calibrate-toggle") as HTMLButtonElement;
-
-  const updateCalibrationUi = () => {
-    canvasStack.classList.toggle("calibrating", isCalibrating);
-    calibrateToggle.disabled = isCalibrating;
-    calibrateToggle.textContent =
-      isCalibrating && currentCalibrationStep >= 0
-        ? `Calibrating ${currentCalibrationStep + 1}/4`
-        : drawCanvas.hasInputCalibration
-        ? "Calibrate Again"
-        : "Calibrate";
-    setCanvasAnchoring(isCalibrating || drawCanvas.hasInputCalibration);
-    if (!isCalibrating) {
-      clearCalibrationOverlay();
-    }
-  };
-
-  const runCalibration = async () => {
-    if (isCalibrating) {
-      return;
-    }
-
-    const targetPoints = drawCanvas.getCalibrationTargets();
-    const sourcePoints: Point[] = [];
-
-    isCalibrating = true;
-    drawCanvas.setInputLocked(true);
-
-    try {
-      for (const [index, targetPoint] of targetPoints.entries()) {
-        currentCalibrationStep = index;
-        updateCalibrationUi();
-        drawCalibrationTarget(targetPoint);
-        sourcePoints.push(await captureCalibrationTouch());
-      }
-
-      if (!drawCanvas.applyInputCalibration(sourcePoints, targetPoints)) {
-        console.error("Calibration failed: unable to compute a stable input transform.");
-      }
-    } catch (error) {
-      console.error("Calibration failed:", error);
-    } finally {
-      isCalibrating = false;
-      currentCalibrationStep = -1;
-      drawCanvas.setInputLocked(false);
-      updateCalibrationUi();
-    }
-  };
-
-  calibrateToggle.addEventListener("click", () => {
-    void runCalibration();
+  new InputCalibrationController({
+    drawingCanvas: drawCanvas,
+    canvasStack,
+    overlayCanvas: document.getElementById("OverlayCanvas") as HTMLCanvasElement,
+    triggerButton: document.getElementById("calibrate-toggle") as HTMLButtonElement,
+    onStateChange: (state) => {
+      setCanvasAnchoring(state.shouldAnchorCanvas);
+    },
   });
-  updateCalibrationUi();
 
   const flipToggle = document.getElementById("flip-toggle") as HTMLButtonElement;
   flipToggle.addEventListener("click", () => {

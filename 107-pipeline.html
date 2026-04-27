@@ -72,7 +72,20 @@
           }
         }
 
+        &.input-debug {
+          .overlay-canvas {
+            display: block;
+          }
+        }
+
         &:not(.debug).calibrating {
+          .overlay-canvas {
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
+          }
+        }
+
+        &:not(.debug).input-debug {
           .overlay-canvas {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
@@ -111,6 +124,12 @@
         }
 
         &.debug.calibrating {
+          .overlay-canvas {
+            grid-area: draw;
+          }
+        }
+
+        &.debug.input-debug {
           .overlay-canvas {
             grid-area: draw;
           }

@@ -21,9 +21,19 @@ interface InputCalibrationControllerOptions {
 
 type HomographyMatrix = [number, number, number, number, number, number, number, number, number];
 
+interface PersistedCalibration {
+  version: 1;
+  transform: HomographyMatrix;
+  flipXAtCalibration: boolean;
+}
+
 const CALIBRATION_CSS_CLASS = "calibrating";
+const DEBUG_CSS_CLASS = "input-debug";
 const VIEWPORT_POINTER_TARGET = "window" as const;
 const DEFAULT_POINTER_IGNORE_SELECTOR = "button, input, textarea, select, dialog, label, a, [contenteditable='true'], .card-queue-container";
+const CALIBRATION_STORAGE_KEY = "ink-form.input-calibration";
+const POST_CALIBRATION_COOLDOWN_MS = 1000;
+const SHIFT_KEY = "Shift";
 
 const CALIBRATION_TARGET_LAYOUT = Object.freeze([
   { x: 0, y: 0 },
@@ -38,6 +48,13 @@ const CALIBRATION_TARGET_STYLE = Object.freeze({
   strokeWidthPx: 4,
   fillColor: "#ff3b30",
   strokeColor: "#ffffff",
+});
+
+const DEBUG_INDICATOR_STYLE = Object.freeze({
+  radiusPx: 10,
+  fillColor: "rgba(255, 59, 48, 0.9)",
+  strokeColor: "rgba(255, 255, 255, 0.95)",
+  strokeWidthPx: 2,
 });
 
 const CALIBRATION_BUTTON_LABELS = Object.freeze({
@@ -157,6 +174,32 @@ function matchesIgnoredPointerTarget(target: EventTarget | null): boolean {
   return Boolean(target.closest(DEFAULT_POINTER_IGNORE_SELECTOR));
 }
 
+function parsePersistedCalibration(rawValue: string | null): PersistedCalibration | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<PersistedCalibration>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.transform) || parsed.transform.length !== 9 || typeof parsed.flipXAtCalibration !== "boolean") {
+      return null;
+    }
+
+    const transform = parsed.transform.map((value) => Number(value));
+    if (transform.some((value) => !Number.isFinite(value))) {
+      return null;
+    }
+
+    return {
+      version: 1,
+      transform: transform as HomographyMatrix,
+      flipXAtCalibration: parsed.flipXAtCalibration,
+    };
+  } catch {
+    return null;
+  }
+}
+
 class CalibrationOverlay {
   private readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
@@ -199,6 +242,19 @@ class CalibrationOverlay {
     this.context.stroke();
     this.context.restore();
   }
+
+  renderIndicator(point: Point): void {
+    this.clear();
+    this.context.save();
+    this.context.fillStyle = DEBUG_INDICATOR_STYLE.fillColor;
+    this.context.strokeStyle = DEBUG_INDICATOR_STYLE.strokeColor;
+    this.context.lineWidth = DEBUG_INDICATOR_STYLE.strokeWidthPx;
+    this.context.beginPath();
+    this.context.arc(point.x, point.y, DEBUG_INDICATOR_STYLE.radiusPx, 0, Math.PI * 2);
+    this.context.fill();
+    this.context.stroke();
+    this.context.restore();
+  }
 }
 
 export class InputCalibrationController {
@@ -214,9 +270,44 @@ export class InputCalibrationController {
   private calibrationTransform: HomographyMatrix | null = null;
   private flipXAtCalibration = false;
   private pendingPointerListenerCleanup: (() => void) | null = null;
+  private postCalibrationUnlockTimer: ReturnType<typeof setTimeout> | null = null;
+  private isShiftHeld = false;
+  private debugPointer: Point | null = null;
+  private lastClientPointer: Point | null = null;
 
   private readonly handleTriggerClick = () => {
     void this.startCalibration();
+  };
+  private readonly handleWindowPointerMove = (event: PointerEvent) => {
+    this.lastClientPointer = { x: event.clientX, y: event.clientY };
+    this.updateDebugPointer(this.lastClientPointer);
+  };
+  private readonly handleWindowKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== SHIFT_KEY) {
+      return;
+    }
+
+    this.isShiftHeld = true;
+    if (this.lastClientPointer) {
+      this.updateDebugPointer(this.lastClientPointer);
+      return;
+    }
+
+    this.render();
+  };
+  private readonly handleWindowKeyUp = (event: KeyboardEvent) => {
+    if (event.key !== SHIFT_KEY) {
+      return;
+    }
+
+    this.isShiftHeld = false;
+    this.debugPointer = null;
+    this.render();
+  };
+  private readonly handleWindowBlur = () => {
+    this.isShiftHeld = false;
+    this.debugPointer = null;
+    this.render();
   };
 
   constructor(options: InputCalibrationControllerOptions) {
@@ -227,12 +318,23 @@ export class InputCalibrationController {
     this.onStateChange = options.onStateChange;
 
     this.triggerButton.addEventListener("click", this.handleTriggerClick);
+    window.addEventListener("pointermove", this.handleWindowPointerMove);
+    window.addEventListener("keydown", this.handleWindowKeyDown);
+    window.addEventListener("keyup", this.handleWindowKeyUp);
+    window.addEventListener("blur", this.handleWindowBlur);
+
+    this.restorePersistedCalibration();
     this.render();
   }
 
   destroy(): void {
     this.triggerButton.removeEventListener("click", this.handleTriggerClick);
+    window.removeEventListener("pointermove", this.handleWindowPointerMove);
+    window.removeEventListener("keydown", this.handleWindowKeyDown);
+    window.removeEventListener("keyup", this.handleWindowKeyUp);
+    window.removeEventListener("blur", this.handleWindowBlur);
     this.clearPendingPointerCapture();
+    this.clearPostCalibrationCooldown();
     this.overlay.clear();
   }
 
@@ -242,11 +344,14 @@ export class InputCalibrationController {
 
   private render(): void {
     this.canvasStack.classList.toggle(CALIBRATION_CSS_CLASS, this.isCalibrating);
+    this.canvasStack.classList.toggle(DEBUG_CSS_CLASS, this.shouldShowDebugIndicator());
     this.triggerButton.disabled = this.isCalibrating;
     this.triggerButton.textContent = this.getButtonLabel();
 
     if (this.isCalibrating && this.currentStepIndex >= 0) {
       this.overlay.renderTarget(this.currentTargets[this.currentStepIndex]);
+    } else if (this.shouldShowDebugIndicator() && this.debugPointer) {
+      this.overlay.renderIndicator(this.debugPointer);
     } else {
       this.overlay.clear();
     }
@@ -266,12 +371,90 @@ export class InputCalibrationController {
     return this.hasCalibration ? CALIBRATION_BUTTON_LABELS.ready : CALIBRATION_BUTTON_LABELS.idle;
   }
 
+  private shouldShowDebugIndicator(): boolean {
+    return !this.isCalibrating && this.isShiftHeld && this.hasCalibration && this.debugPointer !== null;
+  }
+
+  private restorePersistedCalibration(): void {
+    const persisted = parsePersistedCalibration(window.localStorage.getItem(CALIBRATION_STORAGE_KEY));
+    if (!persisted) {
+      return;
+    }
+
+    this.calibrationTransform = persisted.transform;
+    this.flipXAtCalibration = persisted.flipXAtCalibration;
+    this.drawingCanvas.setInputAdapter(this.createInputAdapter());
+  }
+
+  private persistCalibration(): void {
+    if (!this.calibrationTransform) {
+      window.localStorage.removeItem(CALIBRATION_STORAGE_KEY);
+      return;
+    }
+
+    const payload: PersistedCalibration = {
+      version: 1,
+      transform: this.calibrationTransform,
+      flipXAtCalibration: this.flipXAtCalibration,
+    };
+    window.localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  private beginPostCalibrationCooldown(): void {
+    this.clearPostCalibrationCooldown();
+    this.drawingCanvas.setInteractionLocked(true);
+    this.postCalibrationUnlockTimer = setTimeout(() => {
+      this.postCalibrationUnlockTimer = null;
+      if (!this.isCalibrating) {
+        this.drawingCanvas.setInteractionLocked(false);
+      }
+    }, POST_CALIBRATION_COOLDOWN_MS);
+  }
+
+  private clearPostCalibrationCooldown(): void {
+    if (!this.postCalibrationUnlockTimer) {
+      return;
+    }
+
+    clearTimeout(this.postCalibrationUnlockTimer);
+    this.postCalibrationUnlockTimer = null;
+  }
+
+  private updateDebugPointer(clientPoint: Point): void {
+    if (!this.isShiftHeld || !this.hasCalibration) {
+      if (this.debugPointer === null) {
+        return;
+      }
+
+      this.debugPointer = null;
+      this.render();
+      return;
+    }
+
+    const adapter = this.createInputAdapter();
+    if (!adapter) {
+      this.debugPointer = null;
+      this.render();
+      return;
+    }
+
+    const mappedPoint = adapter.mapClientPoint(clientPoint, this.drawingCanvas.element);
+    if (mappedPoint?.x === this.debugPointer?.x && mappedPoint?.y === this.debugPointer?.y) {
+      return;
+    }
+
+    this.debugPointer = mappedPoint;
+    this.render();
+  }
+
   private async startCalibration(): Promise<void> {
     if (this.isCalibrating) {
       return;
     }
 
+    this.clearPostCalibrationCooldown();
     this.isCalibrating = true;
+    this.debugPointer = null;
     this.currentTargets = this.overlay.getTargetPoints();
     this.currentStepIndex = 0;
     this.drawingCanvas.setInteractionLocked(true);
@@ -288,6 +471,7 @@ export class InputCalibrationController {
 
       this.calibrationTransform = nextTransform;
       this.flipXAtCalibration = document.body.classList.contains("flip-x");
+      this.persistCalibration();
       this.drawingCanvas.setInputAdapter(this.createInputAdapter());
     } catch (error) {
       console.error("Calibration failed:", error);
@@ -296,7 +480,7 @@ export class InputCalibrationController {
       this.isCalibrating = false;
       this.currentStepIndex = -1;
       this.currentTargets = [];
-      this.drawingCanvas.setInteractionLocked(false);
+      this.beginPostCalibrationCooldown();
       this.render();
     }
   }

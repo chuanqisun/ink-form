@@ -107,9 +107,13 @@ export class Soundscape {
     return this._sfxEnabled;
   }
 
-  toggleSfx() {
-    this._sfxEnabled = !this._sfxEnabled;
+  setSfxEnabled(enabled: boolean) {
+    this._sfxEnabled = enabled;
     return this._sfxEnabled;
+  }
+
+  toggleSfx() {
+    return this.setSfxEnabled(!this._sfxEnabled);
   }
 
   constructor() {
@@ -161,7 +165,9 @@ export class Soundscape {
       )
       .subscribe({
         next: ({ buffer }) => {
-          this.startBackgroundInternal(buffer);
+          void this.startBackgroundInternal(buffer).catch((err) => {
+            console.error("Failed to start background music:", err);
+          });
         },
         error: (err) => {
           console.error("Failed to load background music:", err);

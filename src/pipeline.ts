@@ -17,9 +17,9 @@ import {
   zip,
 } from "rxjs";
 import { AIConnection } from "./components/ai-connection";
-import { CanvasStack } from "./components/canvas-stack";
 import { CanvasSequenceExporter, type CanvasSequenceExporterStatus } from "./components/canvas-exporter";
 import { CanvasHistory } from "./components/canvas-history";
+import { CanvasStack } from "./components/canvas-stack";
 import { CardQueue } from "./components/card-queue";
 import { CharacterCanvas } from "./components/character-canvas";
 import { DrawingCanvas } from "./components/draw-canvas";
@@ -28,6 +28,7 @@ import { GenerativeCanvas } from "./components/generative-canvas";
 import { startIdeaGeneration } from "./components/idea-generator";
 import { identifyCharacter, identifyCharacterFast } from "./components/identify-character";
 import { InputCalibrationController } from "./components/input-calibration";
+import { PipelineMenuController } from "./components/pipeline-menu";
 import { designSound } from "./components/sound-design";
 import { generateSoundEffect, Soundscape } from "./components/soundscape";
 
@@ -47,6 +48,12 @@ export async function main() {
   const clearCanvasButton = document.getElementById("clear-canvas-button") as HTMLButtonElement;
   const ideaHints = new CardQueue("right", 7);
   const history = new CardQueue("left", 7);
+  const menu = new PipelineMenuController({
+    canvasStack,
+    historyQueue: history,
+    ideaQueue: ideaHints,
+    soundscape,
+  });
 
   generativeCanvas.clear();
   generativeCanvas.clearOverlay();
@@ -133,49 +140,6 @@ export async function main() {
       if (changed) {
         void exporter.captureFrame();
       }
-      return;
-    }
-
-    if (key === "l" && !event.shiftKey) {
-      event.preventDefault();
-      void clearRenderedCanvas();
-    }
-  });
-
-  const setCanvasAnchoring = (enabled: boolean) => {
-    ideaHints.setMappingMode(enabled, canvasStack);
-    history.setMappingMode(enabled, canvasStack);
-  };
-
-  const musicToggle = document.getElementById("music-toggle") as HTMLButtonElement;
-  musicToggle.addEventListener("click", () => {
-    const nextIndex = soundscape.currentTrackIndex + 1;
-    if (nextIndex >= soundscape.totalTracks) {
-      soundscape.stopBackground();
-    } else {
-      soundscape.startBackground(nextIndex).catch((err) => console.error("Failed to start music:", err));
-    }
-    musicToggle.textContent = soundscape.currentTrackIndex === -1 ? "Music: Off" : `Music: ${soundscape.currentTrackIndex + 1}`;
-  });
-
-  const sfxToggle = document.getElementById("sfx-toggle") as HTMLButtonElement;
-  sfxToggle.addEventListener("click", () => {
-    const enabled = soundscape.toggleSfx();
-    sfxToggle.textContent = enabled ? "SFX: On" : "SFX: Off";
-  });
-
-  const layoutToggle = document.getElementById("layout-toggle") as HTMLButtonElement;
-  let isTopBottom = false;
-  layoutToggle.addEventListener("click", () => {
-    isTopBottom = !isTopBottom;
-    if (isTopBottom) {
-      ideaHints.setSide("top");
-      history.setSide("bottom");
-      layoutToggle.textContent = "Layout: Top-Bottom";
-    } else {
-      ideaHints.setSide("right");
-      history.setSide("left");
-      layoutToggle.textContent = "Layout: Left-Right";
     }
   });
 
@@ -185,14 +149,8 @@ export async function main() {
     overlayCanvas: document.getElementById("OverlayCanvas") as HTMLCanvasElement,
     triggerButton: document.getElementById("calibrate-toggle") as HTMLButtonElement,
     onStateChange: (state) => {
-      setCanvasAnchoring(state.shouldAnchorCanvas);
+      menu.setCanvasAnchoring(state.shouldAnchorCanvas);
     },
-  });
-
-  const flipToggle = document.getElementById("flip-toggle") as HTMLButtonElement;
-  flipToggle.addEventListener("click", () => {
-    const isFlipped = document.body.classList.toggle("flip-x");
-    flipToggle.textContent = isFlipped ? "Flip: On" : "Flip: Off";
   });
 
   const recognizedConcepts$ = new Subject<{ character: string; meaning: string }>();

@@ -33,6 +33,7 @@ const VIEWPORT_POINTER_TARGET = "window" as const;
 const DEFAULT_POINTER_IGNORE_SELECTOR = "button, input, textarea, select, dialog, label, a, [contenteditable='true'], .card-queue-container";
 const CALIBRATION_STORAGE_KEY = "ink-form.input-calibration";
 const POST_CALIBRATION_COOLDOWN_MS = 1000;
+const CALIBRATION_INPUT_GAP_MS = 500;
 const SHIFT_KEY = "Shift";
 
 const CALIBRATION_TARGET_LAYOUT = Object.freeze([
@@ -43,7 +44,7 @@ const CALIBRATION_TARGET_LAYOUT = Object.freeze([
 ]);
 
 const CALIBRATION_TARGET_STYLE = Object.freeze({
-  insetRatio: 0.06,
+  insetRatio: 0.08,
   radiusPx: 18,
   strokeWidthPx: 4,
   fillColor: "#ff3b30",
@@ -270,6 +271,7 @@ export class InputCalibrationController {
   private calibrationTransform: HomographyMatrix | null = null;
   private flipXAtCalibration = false;
   private pendingPointerListenerCleanup: (() => void) | null = null;
+  private pendingInputSuppressionCleanup: (() => void) | null = null;
   private postCalibrationUnlockTimer: ReturnType<typeof setTimeout> | null = null;
   private isShiftHeld = false;
   private debugPointer: Point | null = null;
@@ -334,6 +336,7 @@ export class InputCalibrationController {
     window.removeEventListener("keyup", this.handleWindowKeyUp);
     window.removeEventListener("blur", this.handleWindowBlur);
     this.clearPendingPointerCapture();
+    this.clearPendingInputSuppression();
     this.clearPostCalibrationCooldown();
     this.overlay.clear();
   }
@@ -492,6 +495,10 @@ export class InputCalibrationController {
       this.currentStepIndex = index;
       this.render();
       capturedPoints.push(await this.waitForViewportPointerDown());
+
+      if (index < this.currentTargets.length - 1) {
+        await this.waitForCalibrationInputGap();
+      }
     }
 
     return capturedPoints;
@@ -524,6 +531,45 @@ export class InputCalibrationController {
   private clearPendingPointerCapture(): void {
     this.pendingPointerListenerCleanup?.();
     this.pendingPointerListenerCleanup = null;
+  }
+
+  private async waitForCalibrationInputGap(): Promise<void> {
+    this.clearPendingInputSuppression();
+
+    await new Promise<void>((resolve) => {
+      const suppressEvent = (event: Event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointerdown", suppressEvent, true);
+        window.removeEventListener("pointerup", suppressEvent, true);
+        window.removeEventListener("click", suppressEvent, true);
+        window.removeEventListener("keydown", suppressEvent, true);
+        window.removeEventListener("keyup", suppressEvent, true);
+        if (this.pendingInputSuppressionCleanup === cleanup) {
+          this.pendingInputSuppressionCleanup = null;
+        }
+      };
+
+      this.pendingInputSuppressionCleanup = cleanup;
+      window.addEventListener("pointerdown", suppressEvent, { capture: true, passive: false });
+      window.addEventListener("pointerup", suppressEvent, { capture: true, passive: false });
+      window.addEventListener("click", suppressEvent, { capture: true, passive: false });
+      window.addEventListener("keydown", suppressEvent, { capture: true, passive: false });
+      window.addEventListener("keyup", suppressEvent, { capture: true, passive: false });
+
+      window.setTimeout(() => {
+        cleanup();
+        resolve();
+      }, CALIBRATION_INPUT_GAP_MS);
+    });
+  }
+
+  private clearPendingInputSuppression(): void {
+    this.pendingInputSuppressionCleanup?.();
+    this.pendingInputSuppressionCleanup = null;
   }
 
   private createInputAdapter(): DrawingInputAdapter | null {
